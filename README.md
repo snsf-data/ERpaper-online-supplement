@@ -1,2 +1,2 @@
-# ERpaper-online-supplement
-Online supplement for the paper on the expected ranks 
+# Fully reproducible online supplement
+The online supplement of the paper entitled 'Rethinking the Funding Line at the Swiss National Science Foundation: Bayesian Ranking and Lottery' (available as [preprint](...)) can be found [here](https://snsf-data.github.io/ERpaper-online-supplement). The data used for the analysis is publicly available on [Zenodo](https://zenodo.org/record/4531160#.YCWGnWhKiUl). The methodology used in the main paper and the online supplement can be downloaded from [github](...).
