@@ -19,10 +19,7 @@ library(kableExtra)
 # Use here("...") with paths relative to the project root
 # to address files
 library(here)
-
-# Avoid dependency on load order of packages
-# library(conflicted)
-
+library(stringr)
 # Some formatting function(s)
 pretty <- function(x) prettyNum(x, big.mark = "'")
 round_2 <- function(x) round(x, 2)
@@ -33,13 +30,121 @@ options(dplyr.summarise.inform = FALSE)
 options(knitr.kable.NA = '')
 ```
 
-This online supplement reproduces all the Figures and Tables presented in the publication "Rethinking the Funding Line at the Swiss National Science Foundation: Bayesian Ranking and Lottery". The methodology of the expected rank (ER) for grant peer review is fully implemented in the `R` package `{ERforResearch}` downloadable from [github](...). The data used in the paper and this supplement is also [available online](...). To install the package, the following code can be used:
+This online supplement reproduces all the Figures and Tables presented in the publication "Rethinking the Funding Line at the Swiss National Science Foundation: Bayesian Ranking and Lottery". The methodology of the expected rank (ER) for grant peer review is fully implemented in the `R` package `{ERforResearch}` downloadable from [github](https://github.com/snsf-data/ERforResearch) with [documentation](https://snsf-data.github.io/ERforResearch/). To install the package, the following code can be used:
 ```{r, message = FALSE, class.source = "fold-show", warning=FALSE}
 # Install ERforResearch from github:
 # devtools::install_github("snsf-data/ERforResearch")
 library(ERforResearch)
 ```
 
+
+
+```{r helper functions, class.source = "fold-show"}
+get_icc_from_matrix <- function(individual_votes) {
+  (individual_votes %>% 
+     select(-proposal) %>% 
+     mutate_all(function(x) ERforResearch:::get_num_grade_snsf(x)) %>% 
+     as.data.frame() %>% 
+     psych::ICC(x = ., missing = FALSE))$results %>% 
+    filter(type == "ICC3") %>% # A fixed set of k judges rates each target
+    mutate(icc = paste0(round(ICC, 2), " (",
+                        round(`lower bound`, 2), "; ", 
+                        round(`upper bound`, 2), ")")) %>% 
+    pull(icc) %>% 
+    return()
+}
+
+get_grades_plot <- function(long_individual_votes, individual_votes_mat = NULL,
+                            x_min = NULL, x_max = NULL, title = "",
+                            jitter_h = .02, jitter_w = .025,
+                            jitter_alpha = .5){
+  if (is.null(x_min)){
+    x_min <- long_individual_votes %>% pull(num_grade) %>% min
+    x_min <- ifelse(x_min > 1, x_min - 1.2, x_min -.2)
+  }
+  if (is.null(x_max)){
+    x_max <- long_individual_votes %>% pull(num_grade) %>% max
+    x_max <- ifelse(x_max < 6, x_max + 1.2, x_max +.2)
+  }
+  if (!is.null(individual_votes_mat)){
+    icc <- get_icc_from_matrix(individual_votes_mat)
+    title <- paste0(ifelse(title == "", "ICC = ",
+                           paste0(title, ": ICC = ")), icc)
+  }
+  plot_data <- long_individual_votes %>% 
+    group_by(proposal) %>% 
+    mutate(avg = mean(num_grade, na.rm = TRUE)) %>% 
+    ungroup() 
+  plot_data <- plot_data %>% 
+    select(proposal, avg) %>% 
+    distinct() %>% 
+    arrange(avg) %>% 
+    mutate(order = 1:n()) %>% 
+    select(-avg) %>% 
+    left_join(plot_data, by = "proposal")
+  plot_data %>% 
+    ggplot(aes(x = num_grade, y = order)) + 
+    geom_jitter(aes(color = "Individual Votes"), height = jitter_h, 
+                width = jitter_w, alpha = jitter_alpha, size = 1) +
+    geom_point(aes(x = avg, color = "Average"), size = 1.5) + 
+    theme_minimal() +
+    scale_y_continuous(breaks = unique(plot_data$order),
+                       labels = 
+                         as.numeric(str_extract_all(unique(plot_data$proposal),
+                                                    "[0-9]+"))) +
+    labs(x = "Assessor Vote", y = "Ordered proposal", title = title) +
+    lims(x = c(x_min, x_max)) +
+    scale_color_manual(name = " ", 
+                       values = c("Average"="#FF6F6F",
+                                  "Individual Votes" = "#848383")) +
+    theme(axis.text.y = element_blank(),
+          legend.position = c(0.5, .5),
+          axis.title.y = element_blank(),
+          panel.grid.major.y = element_line(size = .1))
+}
+
+get_agreement_plot <- function(rankings, rankings_ordinal, title, ymin = -.5,
+                               ymax = .5, pt_alpha = .8, pt_size = 1){
+  difference <- rankings %>%  
+    select(id_application, er) %>% 
+    rename(er1 = er) %>% 
+    left_join(rankings_ordinal %>% 
+                select(id_application, er) %>% 
+                rename(er2 = er), 
+              by = "id_application") %>% 
+    mutate(difference = er1 - er2,
+           avg = (er1 + er2)/2) %>% 
+    select(id_application, difference, avg)
+  
+  d <- difference %>% 
+    summarise(mean(difference)) %>% pull
+  sd <- difference %>% 
+    summarise(sd(difference)) %>% pull
+  difference %>% 
+    ggplot(aes(x = avg, y = difference)) + 
+    geom_point(alpha = pt_alpha, size = pt_size) + 
+    geom_hline(yintercept = d, color = "gray") + 
+    geom_hline(yintercept = d - 1.96 * sd, color = "darkred", lty = "dotted") + 
+    geom_hline(yintercept = d + 1.96 * sd, color = "darkred", lty = "dotted") + 
+    ylim(ymin, ymax) + 
+    labs(y = "Difference in ER", x = "Average ER of both approaches",
+         title = title) +
+    snf.plot::snsf_theme 
+}
+
+percentile_loss <- function(true_rank, estimated_rank, perc = .3, p = 2,
+                            q = 2, c = 1){
+  I <- length(true_rank)
+  true_percentile <- true_rank / (I + 1)
+  estimated_percentile <- estimated_rank / (I + 1)
+  AB <- (true_percentile > perc) & (estimated_percentile < perc)
+  BA <- (true_percentile < perc) & (estimated_percentile > perc)
+  
+  loss <- (sum(abs(perc - estimated_percentile)^p * AB +
+                 c * abs(estimated_percentile - perc)^q * BA)) / I
+  return(loss)
+}
+```
 
 
 The main paper presents two major case studies. The methodology of the ER is applied to give funding recommendations for two funding instruments at the Swiss National Science Foundation(SNSF): the _Postdoc.Mobility_ fellowship for early career researchers and the SNSF _Project Funding_ scheme. The data for both case studies is available on [Zenodo](https://zenodo.org/record/4531160#.YCQFZehKh3g) and can accessed directly through `R` using the following code chunk:
@@ -49,39 +154,48 @@ The main paper presents two major case studies. The methodology of the ER is app
 # Load the data from Zenodo:
 path_to_xlsx <- "https://zenodo.org/record/4531160/files/individual_votes.xlsx"
 
-hss_s <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_hsss") %>% 
-  get_right_data_format()
+hss_s_mat <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_hsss") 
+hss_s <- hss_s_mat %>% 
+  get_right_data_format(prefix_voter = "voter")
 
-hss_h <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_hssh") %>% 
-  get_right_data_format()
+hss_h_mat <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_hssh") 
+hss_h <- hss_h_mat %>% 
+  get_right_data_format(prefix_voter = "voter")
 
-ls_b <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_lsb") %>% 
-  get_right_data_format()
+ls_b_mat <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_lsb") 
+ls_b <- ls_b_mat %>% 
+  get_right_data_format(prefix_voter = "voter")
 
-ls_m <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_lsm") %>% 
-  get_right_data_format()
+ls_m_mat <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_lsm") 
+ls_m <- ls_m_mat %>% 
+  get_right_data_format(prefix_voter = "voter")
 
-stem <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_stem") %>% 
-  get_right_data_format()
+stem_mat <- openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "pm_stem")
+stem <- stem_mat %>% 
+  get_right_data_format(prefix_voter = "voter")
 
-mint_section1 <- 
-  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section1") %>% 
-  get_right_data_format() %>% 
+mint_section1_mat <- 
+  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section1") 
+mint_section1 <- mint_section1_mat %>% 
+  get_right_data_format(prefix_voter = "voter") %>% 
   mutate(section = "one")
 
-mint_section2 <- 
-  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section2") %>% 
-  get_right_data_format() %>% 
+mint_section2_mat <- 
+  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section2") 
+mint_section2 <- mint_section2_mat %>% 
+  get_right_data_format(prefix_voter = "voter") %>% 
   mutate(section = "two")
 
-mint_section3 <- 
-  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section3") %>% 
-  get_right_data_format() %>% 
+mint_section3_mat <- 
+  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section3")
+mint_section3 <- mint_section3_mat %>% 
+  get_right_data_format(prefix_voter = "voter") %>% 
   mutate(section = "three")
 
-mint_section4 <- 
-  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section4") %>% 
-  get_right_data_format() %>% 
+mint_section4_mat <- 
+  openxlsx::read.xlsx(xlsxFile = path_to_xlsx, sheet = "mint_section4") 
+mint_section4 <- mint_section4_mat %>% 
+  get_right_data_format(prefix_voter = "voter") %>% 
   mutate(section = "four")
 
 # Note that we want to be able to differentiate the proposals in the different
@@ -161,6 +275,33 @@ all_data_pm %>%
 
 ```
 
+For each of the five panels, Figure \@ref(fig:all-grades-pm2020) presents the votes of the panel members to each of the proposals discussed. The proposals are represented on the y-axis, and ordered depending on the average of the individual votes they got (red dots). 
+We see a large variability in the votes.
+Note that we only consider the middle block of proposals that were neither truly exceptional nor of very low quality
+and that the variability of the votes per proposals tends to be larger in the middle block than for proposals a with very low/high average score.
+Some of the members of the STEM panel still assessed a few proposals with a 2, which is the second lowest grade; not surprisingly the STEM panel has the lowest intraclass correlation (ICC), representing the assessor reliability.
+In all 5 panels, the assessor reliability can be classified as either poor or fair.
+
+```{r grade-distribution-plots, fig.height=8, fig.width=9, fig.align="center", warning=FALSE, message=FALSE, fig.cap = "<span style='color: #d3d3d3;'>The individual votes given to all proposals by all panel members. The red dots represent the averages of those individual votes for each proposal. The intra-class correlation coefficients together with their 95\\% confidence intervals of the different panels can be found in the titles of the subfigures. In all panels, the assessor reliability can be classified as poor to fair.</span>\\label{fig:all-grades-pm2020}"}
+
+leg <- cowplot::get_legend(get_grades_plot(hss_h))
+gridExtra::grid.arrange(get_grades_plot(hss_h, hss_h_mat, x_min = 1.8, 
+                                        title = "Humanities") +
+                          theme(legend.position = "none"),
+                        get_grades_plot(hss_s, hss_s_mat, x_min = 1.8,
+                                        title = "Social Sciences") + 
+                          theme(legend.position = "none"),
+                        get_grades_plot(ls_b, ls_b_mat, x_min = 1.8,
+                                        title = "Biology")+ 
+                          theme(legend.position = "none"),
+                        get_grades_plot(ls_m, ls_m_mat, x_min = 1.8,
+                                        title = "Medicine")+ 
+                          theme(legend.position = "none"),
+                        get_grades_plot(stem, stem_mat, x_min = 1.8, 
+                                        title = "STEM")+ 
+                          theme(legend.position = "none"), 
+                        leg)
+```
 
 Then, the Bayesian hierarchical models will be fitted for each of the five panels individually and the expected ranks will be retrieved using the MCMC samples from the latter models.
 
@@ -515,6 +656,162 @@ gridExtra::grid.arrange(plot_theta_dist_humanities +
                           theme(legend.position = "none"), leg, ncol = 2)
 ```
 
+Figure \@ref(fig:rank-credible-intervals-pm2020_ordinal) shows the ER proposals together with their 50\% credible intervals when using an Bayesian hierarchical model for ordinal outcome variable.
+
+```{r rank-credible-intervals-pm2020-ordinal, fig.height=7, fig.width=9.5, warning=FALSE, message=FALSE,  fig.cap = "<span style='color: #d3d3d3;'>The expected rank together with 50% credible intervals of the rank using an ordinal outcome model. </span>\\label{fig:rank_credible_intervals_pm2020_ordinal}", cache = TRUE}
+# Ordinal version of the JAGS model:
+cat("model{
+      # Likelihood:
+      for (i in 1:n) { # i is not the application but the review
+          grade[i] ~ dinterval(latent_trait[i], c[])
+          latent_trait[i] ~ dnorm(mu[i], inv_sigma2)
+          mu[i] <- overall_mean + application_intercept[num_application[i]] +
+            voter_intercept[num_application[i], num_voter[i]]
+      }
+      # Ranks:
+      rank_theta[1:n_application] <- rank(-application_intercept[])
+      # Priors:
+      for (j in 1:n_application){
+        application_intercept[j] ~ dnorm(0, inv_tau_application2)
+      }
+      for (l in 1:n_voters){
+        for(j in 1:n_application){
+          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
+        }
+      }
+      for (l in 1:n_voters){
+        nu[l] ~ dnorm(0, 4) # 1/(0.5^2) = 4
+      }
+      
+      for (k in 1:5){
+        cc[k] ~ dunif(-1000, 1000)
+      }
+      c[1:5] <- sort(cc) 
+      
+      sigma ~ dunif(0.000001, 2)
+      inv_sigma2 <- pow(sigma, -2)
+      inv_tau_application2 <- pow(tau_application, -2)
+      tau_application ~ dunif(0.000001, 2)
+      inv_tau_voter2 <- pow(tau_voter, -2)
+      tau_voter ~ dunif(0.000001, 2)
+    }",
+    file = here("jags_model_ordinal_interval.txt"))
+seed_ordinal <- seed + 1
+mcmc_hss_s_ordinal <- 
+  get_mcmc_samples(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   other_variables = "nu",
+                   ordinal_scale = TRUE, point_scale = 6,
+                   path_to_jags_model = 
+                     here("jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+mcmc_hss_h_ordinal <- 
+  get_mcmc_samples(data = hss_h,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   other_variables = "nu",
+                   ordinal_scale = TRUE, point_scale = 6,
+                   path_to_jags_model = 
+                     here("jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+
+mcmc_ls_b_ordinal <- 
+  get_mcmc_samples(data = ls_b,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   other_variables = "nu",
+                   ordinal_scale = TRUE, point_scale = 6,
+                   path_to_jags_model = 
+                     here("jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+
+mcmc_ls_m_ordinal <- 
+  get_mcmc_samples(data = ls_m,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   other_variables = "nu",
+                   ordinal_scale = TRUE, point_scale = 6,
+                   path_to_jags_model = 
+                     here("jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+mcmc_stem_ordinal <- 
+  get_mcmc_samples(data = stem,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   other_variables = "nu",
+                   ordinal_scale = TRUE, point_scale = 6,
+                   path_to_jags_model = 
+                     here("jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+
+plot_er_dist_humanities_ordinal <- 
+  plot_er_distributions(get_mcmc_samples_result = mcmc_hss_h_ordinal,
+                        n_proposals = hss_h %>% 
+                          summarise(n_distinct(proposal)) %>% pull(),
+                        name_er_or_theta = "rank_theta", title = "Humanities",
+                        number_fundable = how_many_fundable["hss_h"],
+                        outer_show = FALSE, proposal = "") 
+
+plot_er_dist_social_sciences_ordinal <- 
+  plot_er_distributions(get_mcmc_samples_result = mcmc_hss_s_ordinal,
+                        n_proposals = hss_s %>% 
+                          summarise(n_distinct(proposal)) %>% pull(),
+                        name_er_or_theta = "rank_theta", title = "Social Sciences",
+                        number_fundable = how_many_fundable["hss_s"],
+                        outer_show = FALSE, proposal = "")
+
+plot_er_dist_biology_ordinal <- 
+  plot_er_distributions(get_mcmc_samples_result = mcmc_ls_b_ordinal,
+                        n_proposals = ls_b %>% 
+                          summarise(n_distinct(proposal)) %>% pull(),
+                        name_er_or_theta = "rank_theta", title = "Biology",
+                        number_fundable = how_many_fundable["ls_b"],
+                        outer_show = FALSE, proposal = "")
+
+plot_er_dist_medicine_ordinal <- 
+  plot_er_distributions(get_mcmc_samples_result = mcmc_ls_m_ordinal,
+                        n_proposals = ls_m %>% 
+                          summarise(n_distinct(proposal)) %>% pull(),
+                        name_er_or_theta = "rank_theta", title = "Medicine",
+                        number_fundable = how_many_fundable["ls_m"],
+                        outer_show = FALSE, proposal = "")
+
+plot_er_dist_stem_ordinal <- 
+  plot_er_distributions(get_mcmc_samples_result = mcmc_stem_ordinal,
+                        n_proposals = stem %>% 
+                          summarise(n_distinct(proposal)) %>% pull(),
+                        name_er_or_theta = "rank_theta", title = "STEM",
+                        number_fundable = how_many_fundable["stem"],
+                        outer_show = FALSE, proposal = "")
+
+leg <- cowplot::get_legend(plot_er_dist_stem_ordinal)
+gridExtra::grid.arrange(plot_er_dist_humanities_ordinal + 
+                          theme(legend.position = "none"),
+                        plot_er_dist_social_sciences_ordinal + 
+                          theme(legend.position = "none"),
+                        plot_er_dist_medicine_ordinal + 
+                          theme(legend.position = "none"),
+                        plot_er_dist_biology_ordinal + 
+                          theme(legend.position = "none"),
+                        plot_er_dist_stem_ordinal + 
+                          theme(legend.position = "none"), leg, ncol = 2)
+```
 
 As discussed in the main paper, other quantities derived from the ER can be of interest. The ordered PCER of the proposals in the different panels can be found in Figure \@ref{fig:pcer_pm_2020}. Note that the lower the PCER, the better the quality of the proposal compared to all competing proposals. The lowest PCER in the Medicine panel is for example `r ranks_ls_m$rankings %>% pull(pcer) %>% min() %>% round(1)`%, meaning that the probability that the best ranked proposal is of worse quality compared to a randomly selected proposal (including itself) is only `r ranks_ls_m$rankings %>% pull(pcer) %>% min() %>% round(1)`%.
 
@@ -615,6 +912,7 @@ plot_rankogram(data = hss_h,
                id_application = "proposal",
                id_voter = "voter", 
                grade_variable = "num_grade",
+               rank_theta_name = "rank_theta",
                cumulative_rank_prob = TRUE,
                mcmc_samples = mcmc_hss_h)
 ```
@@ -646,11 +944,37 @@ mint_sections %>%
   kable_material(c("striped", "hover"))
 ```
 
-Then, as for the postdoc.mobility fellowships Bayesian hierarchical models will be fitted for each of the four sections individually, but also for the pooled data and adding an additional section effect in the model definition. Afterwards the computation of the expected ranks (and the PCER) is straightfoward using the MCMC samples from the latter models.
+To understand how reliably the assessors' evaluations were in the different sections, we refer to Figure \@ref(fig:all-grades-mint). Compared to the previous Postdoc.Mobility case study, the intra-class correlation coefficients are higher and can be classified as good. 
+One reason for the higher reliability here is that all project funding proposals are included here - also the ones with low/high average scores, for which the votes are usually less variable. (In contrast, we only looked at PM proposals with average scores in the middle range.)
+
+```{r grade-distribution-plots-mint, fig.cap = "<span style='color: #d3d3d3;'>The individual votes given to all proposals by all panel members. The red dots represent the averages of those individual votes for each proposal. The intra-class correlation coefficients (ICC) together with their 95\\% confidence intervals of the different panels can be found in the titles of the subfigures. The overall reliability in the those panels can be classified as good.</span>\\label{fig:all-grades-mint}",fig.height=7, fig.width=9.5, warning = FALSE, fig.align = "center"}
+
+leg <- cowplot::get_legend(get_grades_plot(mint_section1))
+gridExtra::grid.arrange(get_grades_plot(mint_section1, mint_section1_mat,
+                                        x_min = 1.8, title = "Section 1", 
+                                        jitter_alpha = .4, jitter_w = .05) +
+                          theme(legend.position = "none"),
+                        get_grades_plot(mint_section2, mint_section2_mat,
+                                        x_min = 1.8, title = "Section 2", 
+                                        jitter_alpha = .4, jitter_w = .05) + 
+                          theme(legend.position = "none"),
+                        get_grades_plot(mint_section3, mint_section3_mat,
+                                        x_min = 1.8, title = "Section 3", 
+                                        jitter_alpha = .4, jitter_w = .05)+ 
+                          theme(legend.position = "none"),
+                        get_grades_plot(mint_section4, mint_section4_mat, 
+                                        x_min = 1.8, title = "Section 4", 
+                                        jitter_alpha = .4, jitter_w = .05) + 
+                          theme(legend.position = "none")#, leg
+                        )
+```
 
 
-```{r compute-er-mint-data, cache=TRUE, class.source = "fold-show"}
-#### JAGS model with a section effect ####
+Then, as for the postdoc.mobility fellowships Bayesian hierarchical models will be fitted for each of the four sections individually, but also for the pooled data and adding an additional section effect in the model definition. Afterwards the computation of the expected ranks (and the PCER) is straightforward using the MCMC samples from the latter models.
+
+
+```{r compute-er-mint-data, cache = TRUE}
+#### JAGS model for continuous outcome ####
 cat("model{
       # Likelihood:
       for (i in 1:n) { # i is not the application but the review
@@ -686,108 +1010,272 @@ cat("model{
       inv_tau_section2 <- pow(tau_section, -2)
       tau_section ~ dunif(0.000001, 2)
     }",
-    file = here("paper_draft", "jags_model_with_sections.txt"))
+    file = here("revision", "manuscript", "jags_model_with_sections.txt"))
 
 n.iter <- 40000
 n.burnin <- 20000
 n.chains <- 2
 seed <- 1991
-
-mcmc_mint_object <- 
+mcmc_mint <- 
   ERforResearch:::get_mcmc_samples(data = mint_sections,
                                    id_application = "proposal",
                                    id_voter = "voter",
                                    id_section =  "section",
                                    grade_variable = "num_grade",
+                                   tau_section_name = "tau_section",
                                    n_chains = n.chains, n_iter = n.iter,
                                    n_burnin = n.burnin,
-                                   tau_section_name = "tau_section",
                                    path_to_jags_model = 
-                                     here("paper_draft", 
+                                     here("revision", "manuscript",
                                           "jags_model_with_sections.txt"),
-                                   seed = seed, dont_bind = TRUE)
-mcmc_mint <- mcmc(do.call(rbind, mcmc_mint_object))
-
-mcmc_mint_section1_object <-
+                                   seed = seed, quiet = TRUE)
+# Section by section:
+mcmc_mint_section1 <-
   ERforResearch:::get_mcmc_samples(data = mint_section1,
                                    id_application = "proposal",
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
                                    n_burnin = n.burnin,
-                                   quiet = TRUE,
-                                   seed = seed, dont_bind = TRUE)
-mcmc_mint_section1 <- mcmc(do.call(rbind, mcmc_mint_section1_object))
+                                   seed = seed, quiet = TRUE)
 
-mcmc_mint_section2_object <- 
+mcmc_mint_section2 <- 
   ERforResearch:::get_mcmc_samples(data = mint_section2,
                                    id_application = "proposal",
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
                                    n_burnin = n.burnin,
-                                   quiet = TRUE,
-                                   seed = seed, dont_bind = TRUE)
-mcmc_mint_section2 <- mcmc(do.call(rbind, mcmc_mint_section2_object))
+                                   seed = seed, quiet = TRUE)
 
-mcmc_mint_section3_object <-
+mcmc_mint_section3 <-
   ERforResearch:::get_mcmc_samples(data = mint_section3,
                                    id_application = "proposal",
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
                                    n_burnin = n.burnin,
-                                   quiet = TRUE,
-                                   seed = seed, dont_bind = TRUE)
-mcmc_mint_section3 <- mcmc(do.call(rbind, mcmc_mint_section3_object))
+                                   seed = seed, quiet = TRUE)
 
-mcmc_mint_section4_object <-
+mcmc_mint_section4 <-
   ERforResearch:::get_mcmc_samples(data = mint_section4,
                                    id_application = "proposal",
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
                                    n_burnin = n.burnin,
-                                   quiet = TRUE,
-                                   seed = seed, dont_bind = TRUE)
-mcmc_mint_section4 <- mcmc(do.call(rbind, mcmc_mint_section4_object))
+                                   seed = seed, quiet = TRUE)
+
 
 ranks_mint <- 
   get_er_from_jags(data = mint_sections,
                    id_application = "proposal",
                    id_voter = "voter",
                    id_section =  "section",
-                   tau_section_name = "tau_section",
                    grade_variable = "num_grade",
-                   mcmc_samples = mcmc_mint)
+                   tau_section_name = "tau_section",
+                   mcmc_samples = mcmc_mint,
+                   seed = seed)
+
+# Section by section: 
 
 ranks_mint_section1 <-
   get_er_from_jags(data = mint_section1,
                    id_application = "proposal",
                    id_voter = "voter", 
                    grade_variable = "num_grade",
-                   mcmc_samples = mcmc_mint_section1)
+                   mcmc_samples = mcmc_mint_section1,
+                   seed = seed)
 
 ranks_mint_section2 <- 
   get_er_from_jags(data = mint_section2,
                    id_application = "proposal",
                    id_voter = "voter", 
                    grade_variable = "num_grade",
-                   mcmc_samples = mcmc_mint_section2)
+                   mcmc_samples = mcmc_mint_section2,
+                   seed = seed)
 
 ranks_mint_section3 <-
   get_er_from_jags(data = mint_section3,
                    id_application = "proposal",
                    id_voter = "voter", 
                    grade_variable = "num_grade",
-                   mcmc_samples = mcmc_mint_section3)
+                   mcmc_samples = mcmc_mint_section3,
+                   seed = seed)
 
 ranks_mint_section4 <-
   get_er_from_jags(data = mint_section4,
                    id_application = "proposal",
                    id_voter = "voter", 
                    grade_variable = "num_grade",
-                   mcmc_samples = mcmc_mint_section4)
+                   mcmc_samples = mcmc_mint_section4,
+                   seed = seed)
+
+#### JAGS model for ordinal outcome ####
+cat("model{
+      # Likelihood:
+      for (i in 1:n) { # i is not the application but the review
+          grade[i] ~ dinterval(latent_trait[i], c[])
+          latent_trait[i] ~ dnorm(mu[i], inv_sigma2)
+          mu[i] <- overall_mean + application_intercept[num_application[i]] +
+            voter_intercept[num_application[i], num_voter[i]] +
+          section_intercept[num_section[i]]
+      }
+      # Ranks:
+      rank_theta[1:n_application] <- rank(-application_intercept[])
+      # Priors:
+      for (j in 1:n_application){
+        application_intercept[j] ~ dnorm(0, inv_tau_application2)
+      }
+      for (l in 1:n_voters){
+        for(j in 1:n_application){
+          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
+        }
+      }
+      for (l in 1:n_voters){
+        nu[l] ~ dnorm(0, 4) # 1/(0.5^2) = 4
+      }
+      
+      for (l in 1:n_section){
+        section_intercept[l] ~ dnorm(0, inv_tau_section2)
+      }
+      
+      for (k in 1:5){
+        cc[k] ~ dunif(-1000, 1000)
+      }
+      c[1:5] <- sort(cc) 
+      
+      sigma ~ dunif(0.000001, 2)
+      inv_sigma2 <- pow(sigma, -2)
+      inv_tau_application2 <- pow(tau_application, -2)
+      tau_application ~ dunif(0.000001, 2)
+      inv_tau_voter2 <- pow(tau_voter, -2)
+      tau_voter ~ dunif(0.000001, 2)
+      inv_tau_section2 <- pow(tau_section, -2)
+      tau_section ~ dunif(0.000001, 2)
+    }",
+    file = here("revision", "manuscript",
+                "jags_model_with_sections_ordinal.txt"))
+
+seed_ordinal <- seed + 1
+mcmc_mint_ordinal <-
+  get_mcmc_samples(data = mint_sections,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   id_section =  "section",
+                   grade_variable = "num_grade",
+                   tau_section_name = "tau_section",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   ordinal_scale = TRUE,
+                   point_scale = 6,
+                   path_to_jags_model =
+                     here("revision", "manuscript",
+                          "jags_model_with_sections_ordinal.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+# Section by Section: 
+mcmc_mint_section1_ordinal <-
+  get_mcmc_samples(data = mint_section1,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   ordinal_scale = TRUE,
+                   point_scale = 6,
+                   path_to_jags_model =
+                     here("revision", "manuscript",
+                          "jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+
+mcmc_mint_section2_ordinal <-
+    get_mcmc_samples(data = mint_section2,
+                     id_application = "proposal",
+                     id_voter = "voter",
+                     grade_variable = "num_grade",
+                     n_chains = n.chains, n_iter = n.iter,
+                     n_burnin = n.burnin,
+                     ordinal_scale = TRUE,
+                     point_scale = 6,
+                     path_to_jags_model =
+                       here("revision", "manuscript",
+                            "jags_model_ordinal_interval.txt"),
+                     seed = seed_ordinal, quiet = TRUE)
+
+mcmc_mint_section3_ordinal <-
+  get_mcmc_samples(data = mint_section3,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   ordinal_scale = TRUE,
+                   point_scale = 6,
+                   path_to_jags_model =
+                     here("revision", "manuscript",
+                          "jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE)
+
+mcmc_mint_section4_ordinal <-
+    get_mcmc_samples(data = mint_section4,
+                     id_application = "proposal",
+                     id_voter = "voter",
+                     grade_variable = "num_grade",
+                     n_chains = n.chains, n_iter = n.iter,
+                     n_burnin = n.burnin,
+                     ordinal_scale = TRUE,
+                     point_scale = 6,
+                     path_to_jags_model =
+                       here("revision", "manuscript",
+                            "jags_model_ordinal_interval.txt"),
+                     seed = seed_ordinal, quiet = TRUE)
+
+ranks_mint_ordinal <-
+  get_er_from_jags(data = mint_sections,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   id_section =  "section",
+                   grade_variable = "num_grade",
+                   tau_section_name = "tau_section",
+                   mcmc_samples = mcmc_mint_ordinal,
+                   ordinal_scale = TRUE,
+                   point_scale = 6,
+                   seed = seed)
+
+# Section by Section:
+ranks_mint_section1_ordinal <-
+  get_er_from_jags(data = mint_section1,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   grade_variable = "num_grade",
+                   mcmc_samples = mcmc_mint_section1_ordinal,
+                   ordinal_scale = TRUE,
+                   point_scale = 6,
+                   seed = seed_ordinal)
+
+ranks_mint_section2_ordinal <-
+  get_er_from_jags(data = mint_section2,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   grade_variable = "num_grade",
+                   mcmc_samples = mcmc_mint_section2_ordinal,
+                   seed = seed_ordinal)
+
+ranks_mint_section3_ordinal <-
+  get_er_from_jags(data = mint_section3,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   grade_variable = "num_grade",
+                   mcmc_samples = mcmc_mint_section3_ordinal,
+                   seed = seed_ordinal)
+
+ranks_mint_section4_ordinal <-
+  get_er_from_jags(data = mint_section4,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   grade_variable = "num_grade",
+                   mcmc_samples = mcmc_mint_section4_ordinal,
+                   seed = seed_ordinal)
 ```
 
 Figure \@ref(fig:mint-er-plot) shows the resulting expected ranks for each of the sections separately. The proposals are first ranked based on their average score (Fixed Ranking) and the posterior mean of the score. The latter is adjusted for random variation (with a random intercept for the proposal), and the referee behavior (through a random intercept for the voter). Remember that, each section will define a separate funding line. Note that rank 1 is reserved for the best proposal according to its quality assessment. On top of these figures, we can read of the rankability which is very high. This means, that given the many proposals that have to be ranked in each section, the Bayesian hierarchical models are able to explain most of the variation; the estimated proposal effects are close to the true effect and less clouded by random variation. This is also shown in the Figure by the fact that the ER do not quickly converge to the median. The best ERs are `r ranks_mint_section1$rankings$er %>% min() %>% round(2)` for section one, `r ranks_mint_section2$rankings$er %>% min() %>% round(2)` for section two, `r ranks_mint_section3$rankings$er %>% min() %>% round(2)` for section three and `r ranks_mint_section4$rankings$er %>% min() %>% round(2)` for section four; so very close to 1. The worst ERs are `r ranks_mint_section1$rankings$er %>% max() %>% round(2)` for section one, `r ranks_mint_section2$rankings$er %>% max() %>% round(2)` for section two, `r ranks_mint_section3$rankings$er %>% max() %>% round(2)` for section three and `r ranks_mint_section4$rankings$er %>% max() %>% round(2)` for section four, which are all very close to the total number of submissions. 
@@ -1017,6 +1505,50 @@ gridExtra::grid.arrange(
                       ymax = min(ranks_mint$rankings$er) + 150), ncol = 2)
 ```
 
+### Accounting for ordinal outcomes in the project funding evaluation
+
+Similar results are found when using a Bayesian hierarchical model that explicitly accounts for the ordinal nature of the scores, see Figure \@ref(fig:ordinal_mint). Figure \@ref(fig:agreement_ordinal_normal_mint) shows the Bland-Altman plot; the agreement between the BR with an ordinal outcome model and the BR with a continuous outcome model. The mean of all the differences (gray horizontal line) is very close to 0. As for the Postdoc.Mobility Panel, the differences in ER for most proposals lie in the 95\% limits of agreement (red dotted horizontal lines). However, even though both models result in similar results, it is hard to say which modelling approach performs better without knowing exactly which proposals should have been funded or rejected. We therefore compare the performance of the two models in a simulation study, where the true ranks are known.}
+
+```{r mint-er-distr-plot-all-ordinal, echo = FALSE, fig.cap = "<span style='color: #d3d3d3;'>The ER - computed using an ordinal outcome model - ordered from the best (rank 1) to the worst (rank 352) together with their 50% credible intervals. A naive funding line to ensure a 30% success rate is drawn (blue dashed line).</span>", fig.height = 6, fig.width = 7, warning = FALSE, fig.align = "center"}
+
+plot_er_cred_mint_ordinal <- 
+  plot_er_distributions(get_mcmc_samples_result = mcmc_mint_ordinal,
+                        n_proposals = mint_sections %>% 
+                          summarise(n_distinct(proposal)) %>% pull(),
+                        name_er_or_theta = "rank_theta", title = "(B)",
+                        names_proposals = mint_sections %>% 
+                          pull(proposal) %>% unique(),
+                        number_fundable = x,
+                        size_pt = .1, size_outer = 0, size_inner = .3,
+                        alpha_inner = .8, outer_show = FALSE) +
+  theme(axis.text.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.title.y = element_text(size = 7, vjust = 2))
+
+p.zoomrast_ordinal <- plot_er_cred_mint_ordinal + 
+  xlim(levels(plot_er_cred_mint_ordinal$data$parameter)[90:121]) +
+  ylim(c(74, 140)) + 
+  zoomtheme
+
+plot_er_cred_mint_ordinal + 
+  theme(legend.position = "none") +
+  annotation_custom(grob = ggplotGrob(p.zoomrast),
+                    xmin = 160, xmax = 360, 
+                    ymin = min(ranks_mint$rankings$er) + 5,
+                    ymax = min(ranks_mint$rankings$er) + 150)
+```
+
+
+```{r display-agreement-plots-MINT, fig.align='center', fig.height = 6, fig.width = 9, warning=FALSE, message=FALSE, fig.cap = "<span style='color: #d3d3d3;'>Difference in expected rank depending on whether the outcome is modeled as continuous or ordinal variable versus the average ER as computed using the continuous and ordinal outcome model, for all proposals evaluated for project funding. The 95\\% limits of agreement are plotted (red dotted lines) as well as the mean difference (gray line, \\textit{i.e.} bias).</span>\\label{fig:agreement_ordinal_normal_mint}"}
+
+get_agreement_plot(ranks_mint$rankings,
+                   ranks_mint_ordinal$rankings,
+                   title = "MINT - Project Funding",
+                   ymin = -15, ymax = 15, pt_alpha = .5, 
+                   pt_size = .8)
+
+```
+
 
 # Note on convergence diagnostics
 
@@ -1027,3 +1559,158 @@ bayesplot::mcmc_trace(mcmc_ls_b_object,
                       pars = paste0("application_intercept[", 1:18, "]"))
 ```
 
+
+\textcolor{purple}{
+Below we show the values $\hat{R}$ of the Gelman-Rubin convergence diagnostic \citep{Gelman1992}
+and traceplots for some important parameters for the Social Sciences panel in the Postdoc.Mobility case study.
+$\hat{R}$ values substantially above 1 indicate lack of convergence.
+\citet{Gelman2014} have recommended to use $1.1$ as threshold value for $\hat{R}$.
+<!-- \todo{Do not show the upper CI limits in the table?}} -->
+\todo{for MO: add some traceplots}
+
+
+```{r, rhat-values-computation}
+
+## PM case study setting
+n.iter <- 10000
+n.burnin <- 5000
+n.chains <- 2
+seed <- 1991
+seed_ordinal <- seed + 1
+
+## Ordinal models:
+# refit the model without pooling the 2 chains
+mcmc_hss_s_ordinal_2 <-
+  get_mcmc_samples(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin,
+                   other_variables = "nu",
+                   ordinal_scale = TRUE, point_scale = 6,
+                   path_to_jags_model =
+                     here( "revision", "manuscript",
+                           "jags_model_ordinal_interval.txt"),
+                   seed = seed_ordinal, quiet = TRUE,
+                   dont_bind = TRUE)
+
+# do not perform multivariate computation since this sometimes leads to
+# error messages and we do not need that result
+# use the whole series, not only the second half (autoburnin = FALSE)
+rhat_hss_s <- gelman.diag(mcmc_hss_s_ordinal_2, autoburnin = FALSE,
+                         multivariate = FALSE)
+# rhat_est_hss_s <- rhat_hss_s$psrf[ ,1]
+
+# mcmc_hss_h_ordinal_2 <-
+#   get_mcmc_samples(data = hss_h,
+#                    id_application = "proposal",
+#                    id_voter = "voter",
+#                    grade_variable = "num_grade",
+#                    n_chains = n.chains, n_iter = n.iter,
+#                    n_burnin = n.burnin,
+#                    other_variables = "nu",
+#                    ordinal_scale = TRUE, point_scale = 6,
+#                    path_to_jags_model =
+#                      here( "revision", "manuscript",
+#                            "jags_model_ordinal_interval.txt"),
+#                    seed = seed_ordinal, quiet = TRUE,
+#                    dont_bind = TRUE)
+# 
+# rhat_hss_h <- gelman.diag(mcmc_hss_h_ordinal_2, autoburnin = FALSE,
+#                          multivariate = FALSE)
+
+##########################################################
+
+## Normal models:
+# mcmc_hss_h_2 <-
+#  get_mcmc_samples(data = hss_h,
+#                    id_application = "proposal",
+#                    id_voter = "voter",
+#                    grade_variable = "num_grade",
+#                    n_chains = n.chains, n_iter = n.iter,
+#                    n_burnin = n.burnin,
+#                    other_variables = "nu",
+#                    seed = seed, quiet = TRUE,
+#                   dont_bind = TRUE)
+# 
+# rhat_hss_h <- gelman.diag(mcmc_hss_h_2, autoburnin = FALSE,
+#                          multivariate = FALSE)
+# rhat_hss_h$psrf
+
+# mcmc_ls_b_2 <-
+#  get_mcmc_samples(data = ls_b,
+#                    id_application = "proposal",
+#                    id_voter = "voter",
+#                    grade_variable = "num_grade",
+#                    n_chains = n.chains, n_iter = n.iter,
+#                    n_burnin = n.burnin,
+#                    other_variables = "nu",
+#                    seed = seed, quiet = TRUE,
+#                   dont_bind = TRUE)
+# 
+# rhat_ls_b <- gelman.diag(mcmc_ls_b_2, autoburnin = FALSE,
+#                          multivariate = FALSE)
+
+# mcmc_ls_m_2 <-
+#  get_mcmc_samples(data = ls_m,
+#                    id_application = "proposal",
+#                    id_voter = "voter",
+#                    grade_variable = "num_grade",
+#                    n_chains = n.chains, n_iter = n.iter,
+#                    n_burnin = n.burnin,
+#                    other_variables = "nu",
+#                    seed = seed, quiet = TRUE,
+#                   dont_bind = TRUE)
+# 
+# rhat_ls_m <- gelman.diag(mcmc_ls_m_2, autoburnin = FALSE,
+#                          multivariate = FALSE)
+# rhat_ls_m$psrf
+
+## PF MINT setting:
+# n.iter <- 40000
+# n.burnin <- 20000
+# n.chains <- 2
+# seed <- 1991
+# mcmc_mint <-
+#   ERforResearch:::get_mcmc_samples(data = mint_sections,
+#                                    id_application = "proposal",
+#                                    id_voter = "voter",
+#                                    id_section =  "section",
+#                                    grade_variable = "num_grade",
+#                                    tau_section_name = "tau_section",
+#                                    n_chains = n.chains, n_iter = n.iter,
+#                                    n_burnin = n.burnin,
+#                                    path_to_jags_model =
+#                                      here("revision", "manuscript",
+#                                           "jags_model_with_sections.txt"),
+#                                    seed = seed, quiet = TRUE,
+#                                    dont_bind = TRUE)
+# 
+# rhat_mint <- gelman.diag(mcmc_mint, autoburnin = FALSE,
+# some large R_hat values!
+
+
+```
+
+```{r, rhat-values-table}
+# create R_hat values table for Social Sciences panel in PM 
+n_proposal <- 18
+n_voter <- 14
+# adapt the row names to notation in the paper
+rownames <- c(paste0("$\\theta_{", seq(1, n_proposal), "}$"),
+              paste0("$\\nu_{", seq(1, n_voter), "}$"),
+              paste0("rank", "$(\\theta_{", seq(1, n_proposal), "})$"),
+              "$\\sigma$", "$\\tau$", "$\\tau_{\\nu}$")
+
+table_hss_s <- as.data.frame(cbind(rhat_hss_s$psrf[ ,1]))#, rhat_hss_s$psrf[ ,2]))
+row.names(table_hss_s) <- rownames
+
+kable(table_hss_s, digits = 2, "latex", escape = FALSE,
+      col.names =  c("$\\hat{R}$"),#, "Upper CI limit"),
+      row.names = TRUE, booktabs = TRUE,
+      longtable = TRUE,
+      caption = "Estimates of $\\hat{R}$, the Gelman-Rubin convergence diagnostic are given for different parameters in the ordinal model for the Social Sciences panel in the PM case study.") %>%
+  #, and the upper limits of the 95\\% confidence intervals for $\\hat{R}$
+  kable_styling(latex_options = c("hold_position", "repeat_header"))
+```
