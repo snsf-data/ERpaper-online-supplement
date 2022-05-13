@@ -38,7 +38,7 @@ library(ERforResearch)
 ```
 
 
-```{r helper functions, class.source = "fold-show"}
+```{r helper functions}
 ## Some helper functions for later:
 # Function to extract the Intraclass correlation coefficient (ICC) from the 
 # matrix of individual votes:
@@ -304,7 +304,7 @@ gridExtra::grid.arrange(get_grades_plot(hss_h, hss_h_mat, x_min = 1.8,
                         leg)
 ```
 
-Then, the Bayesian hierarchical models will be fitted for each of the five panels individually and the expected ranks will be retrieved using the MCMC samples from the latter models.
+Then, the Bayesian hierarchical models will be fitted for each of the five panels individually and the expected ranks will be retrieved using the MCMC samples from the latter models. Note that the number of iterations, burnin and adaptation (`n.iter`, `n.burnin` and `n.adapt`) are set high enough to ensure convergence of all the MCMC chains. Lower number of iterations etc, will make the code run faster. 
 
 ```{r er-results-pm2020, warning=FALSE, message=FALSE,  class.source = "fold-show", cache = TRUE, results='hide'}
 
@@ -313,10 +313,11 @@ Then, the Bayesian hierarchical models will be fitted for each of the five panel
 
 ##### Get the ER results: ####
 # To make the code run faster, make sure to decrease those numbers
-n.iter <- 120 * 10^{3}
-n.burnin <- 20 * 10^{3}
-n.adapt <- 20 * 10^{3}
-n.chains <- 2
+n.iter <- 50 * 10^{3}
+n.burnin <- 10 * 10^{3}
+n.adapt <- 10 * 10^{3}
+max.iter <- 50 * 10^{3}
+n.chains <- 4
 seed <- 1991
 # as we checked the number of iterations etc needed for convergence before, 
 # the argument max_iter set to the same as n.iter ensures that the algorithm is
@@ -328,9 +329,13 @@ mcmc_hss_s_object <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter =  120 * 10^{3},
-                   other_variables = "nu",
-                   inits_type = "overdispersed",
+                   max_iter =  max.iter,
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "tau_application",
+                       "nu", "tau_voter", "rank_theta", "sigma"),
+                   inits_type = "random",
                    seed = seed, quiet = TRUE, dont_bind = TRUE)
 mcmc_hss_s <- mcmc(do.call(rbind, mcmc_hss_s_object))
 
@@ -341,9 +346,13 @@ mcmc_hss_h_object <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter =  120 * 10^{3},
-                   other_variables = "nu",
-                   inits_type = "overdispersed",
+                   max_iter =  max.iter,
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "tau_application",
+                       "nu", "tau_voter", "rank_theta", "sigma"),
+                   inits_type = "random",
                    seed = seed, quiet = TRUE, dont_bind = TRUE)
 mcmc_hss_h <- mcmc(do.call(rbind, mcmc_hss_h_object))
 
@@ -354,9 +363,13 @@ mcmc_ls_b_object <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter =  120 * 10^{3},
-                   other_variables = "nu",
-                   inits_type = "overdispersed",
+                   max_iter =  max.iter,
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "tau_application",
+                       "nu", "tau_voter", "rank_theta", "sigma"),
+                   inits_type = "random",
                    seed = seed, quiet = TRUE, dont_bind = TRUE)
 mcmc_ls_b <- mcmc(do.call(rbind, mcmc_ls_b_object))
 
@@ -367,9 +380,13 @@ mcmc_ls_m_object <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter =  120 * 10^{3},
-                   other_variables = "nu",
-                   inits_type = "overdispersed",
+                   max_iter =  max.iter,
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "tau_application",
+                       "nu", "tau_voter", "rank_theta", "sigma"),
+                   inits_type = "random",
                    seed = seed, quiet = TRUE, dont_bind = TRUE)
 mcmc_ls_m <- mcmc(do.call(rbind, mcmc_ls_m_object))
 
@@ -380,9 +397,13 @@ mcmc_stem_object <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter =  120 * 10^{3},
-                   other_variables = "nu",
-                   inits_type = "overdispersed",
+                   max_iter =  max.iter,
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "tau_application",
+                       "nu", "tau_voter", "rank_theta", "sigma"),
+                   inits_type = "random",
                    seed = seed, quiet = TRUE, dont_bind = TRUE)
 
 mcmc_stem <- mcmc(do.call(rbind, mcmc_stem_object))
@@ -422,7 +443,7 @@ ranks_stem <- get_er_from_jags(data = stem,
 
 ```
 
-Figure \@ref(fig:ER-plot-pm2020) presents the different stages of ranking of the proposals for all panels together with the rankability. The first column of points in the figure represents ranking based on the simple averages (Fixed). Then the proposals are ranked based on the posterior means of $\theta_i$ (Posterior Mean) and finally, the last column of points the expected rank. The rankability (in the titles of the plots, close to ICC and introduced in [van Houwelingen et al.](https://arxiv.org/ftp/arxiv/papers/2009/2009.03058.pdf)) differs from panel to panel. A naive funding line as represented by the color code in the figure is defined by simply funding the $x$ best ranked proposals, where $x$ can be retrieved from Table \@ref(tab:number-applications-pm). Lower rankability suggests that more proposals are clustered and therefore not clearly differentiatable with their competitors. However, rankability is not an indication on how easy discrimination between funded and not funded proposals can be done (see the Humanities panel, with a relatively low rankability, but two clearly differentiated groups). 
+Figure \@ref(fig:ER-plot-pm2020) presents the different stages of ranking of the proposals for all panels. The first column of points in the figure represents ranking based on the simple averages (Fixed). Then the proposals are ranked based on the posterior means of $\theta_i$ (Posterior Mean) and finally, the last column of points the expected rank. A naive funding line as represented by the color code in the figure is defined by simply funding the $x$ best ranked proposals, where $x$ can be retrieved from Table \@ref(tab:number-applications-pm).
 
 ```{r ER-plot-pm2020, fig.height=8, fig.width=9, warning=FALSE, message=FALSE, fig.cap = "<span style='color: #bababa;'>PM fellowship proposals discussed in the different panels ranked using the average overall score (Fixed), the posterior means of the parameter $\\theta_i$ and the ER. The color code shows which proposals would be funded, if the SNSF simply funds the $x$ best proposals based on the ER, where $x$ is panel-specific and shown in Table \\@ref(tab:number-applications-pm). Points representing tied proposals are on top of each other, but noticable as such because of the numbers.</span>  \\label{fig:ER_pm_2020}",  fig.align="center"}
 ##### Plot the results ####
@@ -495,7 +516,7 @@ gridExtra::grid.arrange(plot_hss_h +
 To fully account for the uncertainty, we plot the same ER of the proposals together with their 50\% credible intervals in Figure \@ref(fig:rank-credible-intervals-pm2020). The methodology then recommends the following decisions: 
 
 * Humanities panel: The four best ranked proposals are funded, the remaining seven are rejected, no random selection element.
-* Social Sciences: The six best ranked proposals are funded, the ten worst ranked proposals are rejected. One proposal is randomly selected for funding among the seventh and the eight proposal.
+* Social Sciences: The seven best ranked proposals are funded, the eleven worst ranked proposals are rejected, no random selection element.
 * Medicine: The five best ranked proposals are funded, the five worst ranked proposals are rejected. Two proposals are randomly selected for funding between the proposals ranked as sixth to ninth.
 * Biology: The eight best ranked proposals are funded, the ten worst ranked proposals are rejected, no random selection element.
 * STEM: The four best ranked proposals are funded, the ten worst ranked proposals are rejected. Two proposals are randomly selected for funding between the proposals ranked as fifth to eighth. 
@@ -612,7 +633,7 @@ gridExtra::grid.arrange(plot_voter_humanities, plot_voter_social_sciences,
 
 ```
 
-Instead of defining the random selection group using the ERs, we can directly use the proposal effects ($\theta_i$'s). Figure \@ref(fig:rank-credible-intervals-theta-pm2020) shows the $\theta_i$'s together with their 50%-Crl, the higher the $\theta_i$ the better the quality of the proposal. The division into the maximum of three groups (accepted, rejected and random selection) is the same using the proposal effects as with the expected rank. 
+Instead of defining the random selection group using the ERs, we can directly use the proposal effects ($\theta_i$'s). Figure \@ref(fig:rank-credible-intervals-theta-pm2020) shows the $\theta_i$'s together with their 50%-Crl, the higher the $\theta_i$ the better the quality of the proposal. The division into the maximum of three groups (accepted, rejected and random selection) is the same using the proposal effects as with the expected rank for all panels, but for the Social Sciences, where a random selection would be applied on two proposals. 
 
 ```{r rank-credible-intervals-theta-pm2020, fig.height=7, fig.width=9.5, warning=FALSE, message=FALSE, fig.cap = "<span style='color: #bababa;'>The means of the posterior distributions of the $\\theta_i$'s together with their 50% credible intervals for the PM fellowship proposals. The dashed blue line is the naive funding line, $e.g$ the posterior mean of the distribution of the $\\theta_i$ of the last fundable proposal.</span> \\label{fig:rank_credible_intervals_theta_pm2020}"}
 
@@ -785,42 +806,6 @@ Figure \@ref(fig:rank-credible-intervals-pm2020-ordinal) shows the ER of the pro
 
 ```{r rank-credible-intervals-pm2020-ordinal, fig.height=7, fig.width=9.5, warning=FALSE, message=FALSE,  fig.cap = "<span style='color: #bababa;'>The expected rank together with 50% credible intervals of the rank using an ordinal outcome model. </span>\\label{fig:rank_credible_intervals_pm2020_ordinal}", cache = TRUE}
 # Ordinal version of the JAGS model:
-cat("model{
-      # Likelihood:
-      for (i in 1:n) { # i is not the application but the review
-          grade[i] ~ dinterval(latent_trait[i], c[])
-          latent_trait[i] ~ dnorm(mu[i], inv_sigma2)
-          mu[i] <- overall_mean + application_intercept[num_application[i]] +
-            voter_intercept[num_application[i], num_voter[i]]
-      }
-      # Ranks:
-      rank_theta[1:n_application] <- rank(-application_intercept[])
-      # Priors:
-      for (j in 1:n_application){
-        application_intercept[j] ~ dnorm(0, inv_tau_application2)
-      }
-      for (l in 1:n_voters){
-        for(j in 1:n_application){
-          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
-        }
-      }
-      for (l in 1:n_voters){
-        nu[l] ~ dnorm(0, 4) # 1/(0.5^2) = 4
-      }
-      
-      for (k in 1:5){
-        cc[k] ~ dunif(-1000, 1000)
-      }
-      c[1:5] <- sort(cc) 
-      
-      sigma ~ dunif(0.000001, 2)
-      inv_sigma2 <- pow(sigma, -2)
-      inv_tau_application2 <- pow(tau_application, -2)
-      tau_application ~ dunif(0.000001, 2)
-      inv_tau_voter2 <- pow(tau_voter, -2)
-      tau_voter ~ dunif(0.000001, 2)
-    }",
-    file = here("jags_model_ordinal_interval.txt"))
 seed_ordinal <- seed + 1
 mcmc_hss_s_ordinal <- 
   get_mcmc_samples(data = hss_s,
@@ -829,12 +814,10 @@ mcmc_hss_s_ordinal <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 120 * 10^{3},
-                   other_variables = "nu",
                    ordinal_scale = TRUE, point_scale = 6,
-                   inits_type = "overdispersed",
-                   path_to_jags_model = 
-                     here("jags_model_ordinal_interval.txt"),
+                   max_iter =  max.iter,
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    seed = seed_ordinal, quiet = TRUE)
 mcmc_hss_h_ordinal <- 
   get_mcmc_samples(data = hss_h,
@@ -843,12 +826,10 @@ mcmc_hss_h_ordinal <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 120 * 10^{3},
-                   other_variables = "nu",
                    ordinal_scale = TRUE, point_scale = 6,
-                   inits_type = "overdispersed",
-                   path_to_jags_model = 
-                     here("jags_model_ordinal_interval.txt"),
+                   max_iter =  max.iter,
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    seed = seed_ordinal, quiet = TRUE)
 
 mcmc_ls_b_ordinal <- 
@@ -858,12 +839,10 @@ mcmc_ls_b_ordinal <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 120 * 10^{3},
-                   other_variables = "nu",
                    ordinal_scale = TRUE, point_scale = 6,
-                   inits_type = "overdispersed",
-                   path_to_jags_model = 
-                     here("jags_model_ordinal_interval.txt"),
+                   max_iter =  max.iter,
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    seed = seed_ordinal, quiet = TRUE)
 
 mcmc_ls_m_ordinal <- 
@@ -873,13 +852,13 @@ mcmc_ls_m_ordinal <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 120 * 10^{3},
-                   other_variables = "nu",
                    ordinal_scale = TRUE, point_scale = 6,
-                   inits_type = "overdispersed",
-                   path_to_jags_model = 
-                     here("jags_model_ordinal_interval.txt"),
+                   max_iter =  max.iter,
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    seed = seed_ordinal, quiet = TRUE)
+
+n.iter <- 100000
 mcmc_stem_ordinal <- 
   get_mcmc_samples(data = stem,
                    id_application = "proposal",
@@ -887,12 +866,10 @@ mcmc_stem_ordinal <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 120 * 10^{3},
-                   other_variables = "nu",
                    ordinal_scale = TRUE, point_scale = 6,
-                   inits_type = "overdispersed",
-                   path_to_jags_model = 
-                     here("jags_model_ordinal_interval.txt"),
+                   max_iter =  max.iter,
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    seed = seed_ordinal, quiet = TRUE)
 
 plot_er_dist_humanities_ordinal <- 
@@ -1023,9 +1000,9 @@ rm(mcmc_hss_h_ordinal,
 
 # Project Funding
 
-(Note that to make this online supplement run faster we decreased the number of iterations, adaptation, and burnin for the following example, as compared to the manuscript.)
+(Note that to make this online supplement run faster you would have to decrease the number of iterations, adaptation, and burnin for the following example. We used a high number, to ensure the convergence of all the chains (for the results presented in the manuscript.)
 
-Project funding (PF) is the SNSF's most important funding instrument. PF grants are meant for research proposals with a topic of the applicant’s own choice. The data that we will analyze in the following originates from the evaluation of the April 2020 Call to the Mathematics, Natural and Engineering Sciences (MINT) Division. All in all, `r length(unique(mint_sections$proposal))` grant proposals were evaluated in the MINT division. To ensure a manageable amount of work to be spread among the panel members and the quality of the reviews and gradings, the evaluation was done in four separate sections. The sections were defined as such that they were of similar sizes and had a similar number of international members and female members. This approach ensures that the section compositions are comparable. Each section did indeed define their own funding line, while keeping the success rate in each section the same ($\sim 30\%$). Table \@ref(tab:summarising) shows the number of proposals evaluated and fundable by section (nine members are present in each section). The number of fundable proposals will be defined as $\sim 30\%$ of the number of evaluated proposals. Each section member or assessor has to individually evaluate each proposal in their section (unless they have a conflict of interest or another reason to be absent during the vote). The average evaluation scores (6=A, \dots, 1=D) given to all the proposals in each section and the averages of the fundable proposals ($30\%$ best ranked according to their average score) are also shown.
+Project funding (PF) is the SNSF's most important funding instrument. PF grants are meant for research proposals with a topic of the applicant’s own choice. The data that we will analyze in the following originates from the evaluation of the April 2020 Call to the Mathematics, Natural and Engineering Sciences (MINT) Division. All in all, `r length(unique(mint_sections$proposal))` grant proposals were evaluated in the MINT division. To ensure a manageable amount of work to be spread among the panel members and the quality of the reviews and gradings, the evaluation was done in four separate sections. The sections were defined as such that they were of similar sizes and had a similar number of international members and female members. This approach ensures that the section compositions are comparable. Each section did indeed define their own funding line, while keeping the success rate in each section the same ($\sim 30\%$). Table \@ref(tab:summarising) shows the number of proposals evaluated and fundable by section (nine members are present in each section). The number of fundable proposals will be defined as $\sim 30\%$ of the number of evaluated proposals. Each section member or assessor has to individually evaluate each proposal in their section (unless they have a conflict of interest or another reason to be absent during the vote). The average evaluation scores (6=A, $\dots$, 1=D) given to all the proposals in each section and the averages of the fundable proposals ($30\%$ best ranked according to their average score) are also shown.
 
 ```{r summarising, echo = FALSE}
 mint_sections %>% 
@@ -1050,7 +1027,7 @@ mint_sections %>%
 ```
 
 To understand how reliably the assessors' evaluations were in the different sections, we refer to Figure \@ref(fig:grade-distribution-plots-mint). Compared to the previous Postdoc.Mobility case study, the intra-class correlation coefficients are higher and can be classified as good. 
-One reason for the higher reliability here is that all project funding proposals are included here - also the ones with low/high average scores, for which the votes are usually less variable. (In contrast, we only looked at PM proposals with average scores in the middle range.)
+One reason for the higher reliability here is that _all_ project funding proposals are included - also the ones with low/high average scores, for which the votes are usually less variable. (In contrast, we only looked at PM proposals with average scores in the middle range.)
 
 ```{r grade-distribution-plots-mint, fig.cap = "<span style='color: #bababa;'>The individual votes given to all proposals by all panel members. The red dots represent the averages of those individual votes for each proposal. The intra-class correlation coefficients (ICC) together with their 95\\% confidence intervals of the different panels can be found in the titles of the subfigures. The overall reliability in the those panels can be classified as good.</span>\\label{fig:all-grades-mint}",fig.height=7, fig.width=9.5, warning = FALSE, fig.align = "center"}
 
@@ -1075,81 +1052,61 @@ gridExtra::grid.arrange(get_grades_plot(mint_section1, mint_section1_mat,
 ```
 
 
-Then, as for the postdoc.mobility fellowships Bayesian hierarchical models will be fitted for each of the four sections individually, but also for the pooled data and adding an additional section effect in the model definition. Afterwards the computation of the expected ranks (and the PCER) is straightforward using the MCMC samples from the latter models.
+Then, as for the postdoc.mobility fellowships, Bayesian hierarchical models will be fitted for each of the four sections individually, but also for the pooled data and adding an additional section effect in the model definition. Afterwards the computation of the expected ranks (and the PCER) is straightforward using the MCMC samples from the latter models.
 
 
-```{r compute-er-mint-data, cache = TRUE, results = "hide"}
+```{r compute-er-mint-data, eval = FALSE, results = "hide"}
 #### JAGS model for continuous outcome ####
-cat("model{
-      # Likelihood:
-      for (i in 1:n) { # i is not the application but the review
-          grade[i] ~ dnorm(mu[i], inv_sigma2)
-                # inv_sigma2 is precision (1 / variance)
-          mu[i] <- overall_mean + application_intercept[num_application[i]] +
-          voter_intercept[num_application[i], num_voter[i]] +
-          section_intercept[num_section[i]]
-      }
-      # Ranks:
-      rank_theta[1:n_application] <- rank(-application_intercept[])
-      # Priors:
-      for (j in 1:n_application){
-        application_intercept[j] ~ dnorm(0, inv_tau_application2)
-      }
-      for (l in 1:n_voters){
-        for(j in 1:n_application){
-          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
-        }
-      }
-      for (l in 1:n_voters){
-        nu[l] ~ dnorm(0, 4) # 1/(0.5^2) = 4
-      }
-      for (l in 1:n_section){
-        section_intercept[l] ~ dnorm(0, inv_tau_section2)
-      }
-      sigma ~ dunif(0.000001, 2)
-      inv_sigma2 <- pow(sigma, -2)
-      inv_tau_application2 <- pow(tau_application, -2)
-      tau_application ~ dunif(0.000001, 2)
-      inv_tau_voter2 <- pow(tau_voter, -2)
-      tau_voter ~ dunif(0.000001, 2)
-      inv_tau_section2 <- pow(tau_section, -2)
-      tau_section ~ dunif(0.000001, 2)
-    }",
-    file = here("revision", "manuscript", "jags_model_with_sections.txt"))
-
-n.iter <- 150 * 10^{3} #500 * 10^{3}
-n.burnin <- 50 * 10^{3} # 100 * 10^{3}
-n.adapt <- 50 * 10^{3} # 100 * 10^{3}
-n.chains <- 2
+# default model
+n.iter <- 400 * 10^{3}
+n.burnin <- 150 * 10^{3}
+n.adapt <- 100 * 10^{3}
+n.chains <- 4
 seed <- 1991
-mcmc_mint <- 
-  ERforResearch:::get_mcmc_samples(data = mint_sections,
-                                   id_application = "proposal",
-                                   id_voter = "voter",
-                                   id_section =  "section",
-                                   grade_variable = "num_grade",
-                                   tau_section_name = "tau_section",
-                                   n_chains = n.chains, n_iter = n.iter,
-                                   n_burnin = n.burnin, n_adapt = n.adapt,
-                                   max_iter = 150 * 10^{3}, # 500 * 10^{3},
-                                   inits_type = "overdispersed",
-                                   path_to_jags_model = 
-                                     here("revision", "manuscript",
-                                          "jags_model_with_sections.txt"),
-                                   seed = seed, quiet = TRUE)
+mcmc_mint_object <- 
+  get_mcmc_samples(data = mint_sections,
+                   id_application = "proposal",
+                   id_voter = "voter",
+                   id_section =  "section",
+                   grade_variable = "num_grade",
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin, n_adapt = n.adapt,
+                   max_iter = 400 * 10^{3},
+                   inits_type = "random",
+                   rhat_threshold = 1.1,
+                   variables_to_sample = "specified",
+                   names_variables_to_sample =
+                     c("tau_application", "tau_voter", "sigma",
+                       "rank_theta", "tau_section"),
+                   seed = seed, quiet = TRUE,
+                   dont_bind = TRUE)
+```
+
+
+```{r compute-er-mint-data-load, echo = FALSE, results = "hide"}
+mcmc_mint_object <- readRDS(here("minor_revision", "manuscript",
+                                 "run_models", 
+                                 "mcmc_mint_object_0405_random.rds"))
+```
+
+
+```{r compute-er-mint-data-one-by-one, cache = TRUE, results = "hide"}
 # Section by section:
 n.iter <- 120 * 10^{3}
 n.burnin <- 30 * 10^{3}
 n.adapt <- 30 * 10^{3}
+n.chains <- 4
 mcmc_mint_section1 <-
   ERforResearch:::get_mcmc_samples(data = mint_section1,
                                    id_application = "proposal",
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
-                                   n_burnin = n.burnin, n_adapt = n.adapt,
+                                   n_burnin = n.burnin, 
+                                   n_adapt = n.adapt,
                                    max_iter = 120 * 10^{3},
-                                   inits_type = "overdispersed",
+                                   rhat_threshold = 1.1,
+                                   inits_type = "random",
                                    seed = seed, quiet = TRUE)
 
 mcmc_mint_section2 <- 
@@ -1158,9 +1115,11 @@ mcmc_mint_section2 <-
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
-                                   n_burnin = n.burnin, n_adapt = n.adapt,
+                                   n_burnin = n.burnin, 
+                                   n_adapt = n.adapt,
                                    max_iter = 120 * 10^{3},
-                                   inits_type = "overdispersed",
+                                   rhat_threshold = 1.1,
+                                   inits_type = "random",
                                    seed = seed, quiet = TRUE)
 
 mcmc_mint_section3 <-
@@ -1169,9 +1128,11 @@ mcmc_mint_section3 <-
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
-                                   n_burnin = n.burnin, n_adapt = n.adapt,
+                                   n_burnin = n.burnin,
+                                   n_adapt = n.adapt,
                                    max_iter = 120 * 10^{3},
-                                   inits_type = "overdispersed",
+                                   rhat_threshold = 1.1,
+                                   inits_type = "random",
                                    seed = seed, quiet = TRUE)
 
 mcmc_mint_section4 <-
@@ -1180,9 +1141,11 @@ mcmc_mint_section4 <-
                                    id_voter = "voter", 
                                    grade_variable = "num_grade",
                                    n_chains = n.chains, n_iter = n.iter,
-                                   n_burnin = n.burnin, n_adapt = n.adapt,
+                                   n_burnin = n.burnin,
+                                   n_adapt = n.adapt,
                                    max_iter = 120 * 10^{3},
-                                   inits_type = "overdispersed",
+                                   rhat_threshold = 1.1,
+                                   inits_type = "random",
                                    seed = seed, quiet = TRUE)
 
 
@@ -1193,8 +1156,8 @@ ranks_mint <-
                    id_section =  "section",
                    grade_variable = "num_grade",
                    tau_section_name = "tau_section",
-                   mcmc_samples = mcmc_mint,
-                   seed = seed)
+                   mcmc_samples = mcmc_mint_object,
+                   seed = seed, rank_pm = FALSE)
 
 # Section by section: 
 
@@ -1204,7 +1167,7 @@ ranks_mint_section1 <-
                    id_voter = "voter", 
                    grade_variable = "num_grade",
                    mcmc_samples = mcmc_mint_section1,
-                   seed = seed)
+                   seed = seed, rank_pm = FALSE)
 
 ranks_mint_section2 <- 
   get_er_from_jags(data = mint_section2,
@@ -1212,7 +1175,7 @@ ranks_mint_section2 <-
                    id_voter = "voter", 
                    grade_variable = "num_grade",
                    mcmc_samples = mcmc_mint_section2,
-                   seed = seed)
+                   seed = seed, rank_pm = FALSE)
 
 ranks_mint_section3 <-
   get_er_from_jags(data = mint_section3,
@@ -1220,7 +1183,7 @@ ranks_mint_section3 <-
                    id_voter = "voter", 
                    grade_variable = "num_grade",
                    mcmc_samples = mcmc_mint_section3,
-                   seed = seed)
+                   seed = seed, rank_pm = FALSE)
 
 ranks_mint_section4 <-
   get_er_from_jags(data = mint_section4,
@@ -1228,61 +1191,16 @@ ranks_mint_section4 <-
                    id_voter = "voter", 
                    grade_variable = "num_grade",
                    mcmc_samples = mcmc_mint_section4,
-                   seed = seed)
+                   seed = seed, rank_pm = FALSE)
 ```
 
 
-```{r compute-er-mint-data-part2, cache = TRUE, results = "hide"}
+```{r compute-er-mint-data-part2, eval = FALSE, results = "hide"}
 #### JAGS model for ordinal outcome ####
-cat("model{
-      # Likelihood:
-      for (i in 1:n) { # i is not the application but the review
-          grade[i] ~ dinterval(latent_trait[i], c[])
-          latent_trait[i] ~ dnorm(mu[i], inv_sigma2)
-          mu[i] <- overall_mean + application_intercept[num_application[i]] +
-            voter_intercept[num_application[i], num_voter[i]] +
-          section_intercept[num_section[i]]
-      }
-      # Ranks:
-      rank_theta[1:n_application] <- rank(-application_intercept[])
-      # Priors:
-      for (j in 1:n_application){
-        application_intercept[j] ~ dnorm(0, inv_tau_application2)
-      }
-      for (l in 1:n_voters){
-        for(j in 1:n_application){
-          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
-        }
-      }
-      for (l in 1:n_voters){
-        nu[l] ~ dnorm(0, 4) # 1/(0.5^2) = 4
-      }
-      
-      for (l in 1:n_section){
-        section_intercept[l] ~ dnorm(0, inv_tau_section2)
-      }
-      
-      for (k in 1:5){
-        cc[k] ~ dunif(-1000, 1000)
-      }
-      c[1:5] <- sort(cc) 
-      
-      sigma ~ dunif(0.000001, 2)
-      inv_sigma2 <- pow(sigma, -2)
-      inv_tau_application2 <- pow(tau_application, -2)
-      tau_application ~ dunif(0.000001, 2)
-      inv_tau_voter2 <- pow(tau_voter, -2)
-      tau_voter ~ dunif(0.000001, 2)
-      inv_tau_section2 <- pow(tau_section, -2)
-      tau_section ~ dunif(0.000001, 2)
-    }",
-    file = here("revision", "manuscript",
-                "jags_model_with_sections_ordinal.txt"))
-
-n.iter <- 150 * 10^{3} # 500 * 10^{3}
-n.burnin <- 50 * 10^{3} # 100 * 10^{3}
-n.adapt <- 50 * 10^{3} # 100 * 10^{3}
-n.chains <- 2
+n.iter <- 400 * 10^{3}
+n.burnin <- 150 * 10^{3}
+n.adapt <- 100 * 10^{3}
+n.chains <- 4
 seed_ordinal <- seed + 1
 mcmc_mint_ordinal <-
   get_mcmc_samples(data = mint_sections,
@@ -1293,19 +1211,28 @@ mcmc_mint_ordinal <-
                    tau_section_name = "tau_section",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 150 * 10^{3}, # 500 * 10^{3},
-                   inits_type = "overdispersed",
+                   max_iter = 400 * 10^{3}, 
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    ordinal_scale = TRUE,
                    point_scale = 6,
-                   path_to_jags_model =
-                     here("revision", "manuscript",
-                          "jags_model_with_sections_ordinal.txt"),
                    seed = seed_ordinal, quiet = TRUE)
+```
 
+
+```{r compute-er-mint-data-part-ordinal, echo = FALSE,  results = "hide"}
+mcmc_mint_ordinal <- 
+  readRDS(here("minor_revision", "manuscript", "run_models", 
+               "mcmc_mint_object_ordinal_0805.rds"))
+```
+
+
+```{r compute-er-mint-data-onebyone, cache = TRUE, results = "hide"}
 # Section by section:
 n.iter <- 120 * 10^{3}
 n.burnin <- 30 * 10^{3}
 n.adapt <- 30 * 10^{3}
+n.chains <- 4
 
 mcmc_mint_section1_ordinal <-
   get_mcmc_samples(data = mint_section1,
@@ -1315,12 +1242,10 @@ mcmc_mint_section1_ordinal <-
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
                    max_iter = 120 * 10^{3}, 
-                   inits_type = "overdispersed",
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    ordinal_scale = TRUE,
                    point_scale = 6,
-                   path_to_jags_model =
-                     here("revision", "manuscript",
-                          "jags_model_ordinal_interval.txt"),
                    seed = seed_ordinal, quiet = TRUE)
 
 mcmc_mint_section2_ordinal <-
@@ -1330,13 +1255,11 @@ mcmc_mint_section2_ordinal <-
                      grade_variable = "num_grade",
                      n_chains = n.chains, n_iter = n.iter,
                      n_burnin = n.burnin, n_adapt = n.adapt,
-                     max_iter = 120 * 10^{3},
-                     inits_type = "overdispersed",
+                     max_iter = 120 * 10^{3}, 
+                     rhat_threshold = 1.1,
+                     inits_type = "random",
                      ordinal_scale = TRUE,
                      point_scale = 6,
-                     path_to_jags_model =
-                       here("revision", "manuscript",
-                            "jags_model_ordinal_interval.txt"),
                      seed = seed_ordinal, quiet = TRUE)
 
 mcmc_mint_section3_ordinal <-
@@ -1346,13 +1269,11 @@ mcmc_mint_section3_ordinal <-
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 120 * 10^{3},
-                   inits_type = "overdispersed",
+                   max_iter = 120 * 10^{3}, 
+                   rhat_threshold = 1.1,
+                   inits_type = "random",
                    ordinal_scale = TRUE,
                    point_scale = 6,
-                   path_to_jags_model =
-                     here("revision", "manuscript",
-                          "jags_model_ordinal_interval.txt"),
                    seed = seed_ordinal, quiet = TRUE)
 
 mcmc_mint_section4_ordinal <-
@@ -1362,13 +1283,11 @@ mcmc_mint_section4_ordinal <-
                      grade_variable = "num_grade",
                      n_chains = n.chains, n_iter = n.iter,
                      n_burnin = n.burnin, n_adapt = n.adapt,
-                     max_iter = 120 * 10^{3},
-                     inits_type = "overdispersed",
+                     max_iter = 120 * 10^{3}, 
+                     rhat_threshold = 1.1,
+                     inits_type = "random",
                      ordinal_scale = TRUE,
                      point_scale = 6,
-                     path_to_jags_model =
-                       here("revision", "manuscript",
-                            "jags_model_ordinal_interval.txt"),
                      seed = seed_ordinal, quiet = TRUE)
 
 ranks_mint_ordinal <-
@@ -1419,24 +1338,29 @@ ranks_mint_section4_ordinal <-
                    seed = seed_ordinal)
 ```
 
-Figure \@ref(fig:mint-er-plot) shows the resulting expected ranks for each of the sections separately. The proposals are first ranked based on their average score (Fixed Ranking) and the posterior mean of the score. The latter is adjusted for random variation (with a random intercept for the proposal), and the referee behavior (through a random intercept for the assessor). Remember that, each section will define a separate funding line. Note that rank 1 is reserved for the best proposal according to its quality assessment. On top of these figures, we can read of the rankability which is very high. This means, that given the many proposals that have to be ranked in each section, the Bayesian hierarchical models are able to explain most of the variation; the estimated proposal effects are close to the true effect and less clouded by random variation. This is also shown in the Figure by the fact that the ER do not quickly converge to the median. The best ERs are `r ranks_mint_section1$rankings$er %>% min() %>% round(2)` for section one, `r ranks_mint_section2$rankings$er %>% min() %>% round(2)` for section two, `r ranks_mint_section3$rankings$er %>% min() %>% round(2)` for section three and `r ranks_mint_section4$rankings$er %>% min() %>% round(2)` for section four; so very close to 1. The worst ERs are `r ranks_mint_section1$rankings$er %>% max() %>% round(2)` for section one, `r ranks_mint_section2$rankings$er %>% max() %>% round(2)` for section two, `r ranks_mint_section3$rankings$er %>% max() %>% round(2)` for section three and `r ranks_mint_section4$rankings$er %>% max() %>% round(2)` for section four, which are all very close to the total number of submissions. 
+Figure \@ref(fig:mint-er-plot) shows the resulting expected ranks for each of the sections separately. The proposals are first ranked based on their average score (Fixed Ranking) to then compute the ER. Remember that, each section will define a separate funding line. Note that rank 1 is reserved for the best proposal according to its quality assessment. The best ERs are `r ranks_mint_section1$rankings$er %>% min() %>% round(2)` for section one, `r ranks_mint_section2$rankings$er %>% min() %>% round(2)` for section two, `r ranks_mint_section3$rankings$er %>% min() %>% round(2)` for section three and `r ranks_mint_section4$rankings$er %>% min() %>% round(2)` for section four; so very close to 1. The worst ERs are `r ranks_mint_section1$rankings$er %>% max() %>% round(2)` for section one, `r ranks_mint_section2$rankings$er %>% max() %>% round(2)` for section two, `r ranks_mint_section3$rankings$er %>% max() %>% round(2)` for section three and `r ranks_mint_section4$rankings$er %>% max() %>% round(2)` for section four, which are all very close to the total number of submissions. 
 
 ```{r}
-mcmc_mint_section1$samples <- 
-  mcmc_mint_section1$samples[sample(1:240000, 24000),]
-mcmc_mint_section2$samples <-
-  mcmc_mint_section2$samples[sample(1:240000, 24000),]
-mcmc_mint_section3$samples <-
-  mcmc_mint_section3$samples[sample(1:240000, 24000),]
-mcmc_mint_section4$samples <-
-  mcmc_mint_section4$samples[sample(1:240000, 24000),]
+# mcmc_mint_section1$samples <- 
+#   mcmc_mint_section1$samples[sample(1:240000, 24000),]
+# mcmc_mint_section2$samples <-
+#   mcmc_mint_section2$samples[sample(1:240000, 24000),]
+# mcmc_mint_section3$samples <-
+#   mcmc_mint_section3$samples[sample(1:240000, 24000),]
+# mcmc_mint_section4$samples <-
+#   mcmc_mint_section4$samples[sample(1:240000, 24000),]
 
-mcmc_mint$samples <-
-  mcmc_mint$samples[sample(1:240000, 24000),]
+# mcmc_mint_object2$samples <-
+mcmc_mint <- mcmc_mint_object
+rm(mcmc_mint_object)
+mcmc_mint$samples <- do.call("rbind", mcmc_mint$samples)
+mcmc_mint$samples <- mcmc_mint$samples[sample(1:1600000, 100000),]
+  
+mcmc_mint_ordinal$samples <- mcmc_mint_ordinal$samples[sample(1:1600000, 100000),]
 ```
 
 
-```{r mint-er-plot, fig.cap = "<span style='color: #bababa;'>The proposals to the different sections in the MINT division ranked based on the average overall score (Fixed Ranking), the posterior means and the expected rank (ER). The color code tells us which proposals could be funded (orange) to ensure a 30\\% success rate.</span>\\label{fig:rank_mint_section}", fig.height=7, fig.width=9.5, warning = FALSE, fig.align = "center"}
+```{r mint-er-plot, fig.cap = "<span style='color: #bababa;'>The proposals to the different sections in the MINT division ranked based on the average overall score (Fixed Ranking) and the expected rank (ER). The color code tells us which proposals could be funded (orange) to ensure a 30\\% success rate.</span>\\label{fig:rank_mint_section}", fig.height=7, fig.width=9.5, warning = FALSE, fig.align = "center"}
 x1 <- round(.3 * (mint_section1 %>% 
   pull(proposal) %>% 
   unique() %>% 
@@ -1444,7 +1368,7 @@ x1 <- round(.3 * (mint_section1 %>%
 
 p1 <- plotting_er_results(ranks_mint_section1, title = "Section 1",
                           result_show = FALSE, how_many_fundable = x1,
-                          draw_funding_line = FALSE) 
+                          draw_funding_line = FALSE, no_pm_available = TRUE) 
 
 x2 <- round(.3 * (mint_section2 %>% 
   pull(proposal) %>% 
@@ -1453,7 +1377,7 @@ x2 <- round(.3 * (mint_section2 %>%
 
 p2 <- plotting_er_results(ranks_mint_section2, title = "Section 2",
                           result_show = FALSE, how_many_fundable = x2,
-                          draw_funding_line = FALSE) 
+                          draw_funding_line = FALSE, no_pm_available = TRUE) 
 
 x3 <- round(.3 * (mint_section3 %>% 
   pull(proposal) %>% 
@@ -1462,7 +1386,7 @@ x3 <- round(.3 * (mint_section3 %>%
 
 p3 <- plotting_er_results(ranks_mint_section3, title = "Section 3",
                           result_show = FALSE, how_many_fundable = x3,
-                          draw_funding_line = FALSE) 
+                          draw_funding_line = FALSE, no_pm_available = TRUE) 
 
 x4 <- round(.3 * (mint_section4 %>% 
   pull(proposal) %>% 
@@ -1471,7 +1395,7 @@ x4 <- round(.3 * (mint_section4 %>%
 
 p4 <- plotting_er_results(ranks_mint_section4, title = "Section 4",
                           result_show = FALSE, how_many_fundable = x4,
-                          draw_funding_line = FALSE) 
+                          draw_funding_line = FALSE, no_pm_available = TRUE) 
 
 leg <- cowplot::get_legend(p1)
 gridExtra::grid.arrange(p1 + 
@@ -1494,7 +1418,7 @@ gridExtra::grid.arrange(p1 +
 ```
 
 
-To better decide on which proposals should be funded in each section individually, and where, if needed, a random selection group should be defined, consider Figure \ref{fig:ER_dist_all_mint_ind}. Hence, looking at the section seperately would lead to a random selection group of 9 in Section 1, which is `r round(9/87*100, 1)`% of all proposals evaluated in this section; 5 (`r round(5/9*100, 1)`%) of these can still be funded. No random selection group is needed for section 2 and 3, while three more proposals would be selected among the six proposal in the random selection group for section 4. 
+To better decide on which proposals should be funded in each section individually, and where, if needed, a random selection group should be defined, consider Figure \ref{fig:ER_dist_all_mint_ind}. Hence, looking at the section seperately would lead to a random selection group of 8 in Section 1, which is `r round(8/87*100, 1)`% of all proposals evaluated in this section; 2 (`r round(2/8*100, 1)`%) of these can still be funded. No random selection group is needed for section 2, while three more proposals can still be funded among five in the random selection group in section 3, and three more proposals in a random selection group of seven for section 4. 
 
 ```{r er-rank-distribution-mint-ind, fig.height=8, fig.width=9, warning=FALSE, message=FALSE, fig.cap = "<span style='color: #bababa;'>The ER with 50\\% credible intervals. The color code shows the final group (Accepted, Rejected or Random Selection).</span>\\label{fig:ER_dist_all_mint_ind}", fig.align="center"}
 
@@ -1615,20 +1539,20 @@ x <- round(.3*n_distinct(mint_sections$proposal))
 
 plotting_er_results(ranks_mint, title = "MINT (all sections)",
                     result_show = FALSE, how_many_fundable = x,
-                    draw_funding_line = FALSE) +
+                    draw_funding_line = FALSE, no_pm_available = TRUE) +
   theme(axis.text.y = element_blank())
 ```
 
 
-```{r mint-er-distr-plot-all, echo = FALSE, fig.cap = "<span style='color: #bababa;'>(A) All the proposals to the MINT division (from all sections) ranked based on the average overall score (Fixed), the posterior means and the expected rank. The color code tells us which proposals could be funded (orange) to ensure a 30\\% success rate.\\label{fig:rank_mint_all} (B) Shows the same ER ordered from the best (rank 1) to the worst (rank 352) together with their 50% credible intervals. A naive funding line to ensure a 30% success rate is drawn (blue dashed line).</span>", fig.height = 6, fig.width = 7, warning = FALSE, fig.align = "center"}
+```{r mint-er-distr-plot-all, echo = FALSE, fig.cap = "<span style='color: #bababa;'>(A) All the proposals to the MINT division (from all sections) ranked based on the average overall score (Fixed) and the expected rank. The color code tells us which proposals could be funded (orange) to ensure a 30\\% success rate.\\label{fig:rank_mint_all} (B) Shows the same ER ordered from the best (rank 1) to the worst (rank 352) together with their 50% credible intervals. A naive funding line to ensure a 30% success rate is drawn (blue dashed line).</span>", fig.height = 6, fig.width = 7, warning = FALSE, fig.align = "center"}
 x <- round(.3*n_distinct(mint_sections$proposal))
 
 plot_er_mint <- 
   plotting_er_results(ranks_mint, title = "(A)",
-                      result_show = FALSE, rankability = TRUE,
+                      result_show = FALSE, 
                       pt_size = .3, line_size = .1, alpha_line = .7, 
                       alpha_pt = .8, how_many_fundable = x,
-                      draw_funding_line = FALSE) +
+                      draw_funding_line = FALSE, no_pm_available = TRUE) +
   theme(axis.text.y = element_blank())
 
 
@@ -1661,7 +1585,7 @@ gridExtra::grid.arrange(
                       ymax = min(ranks_mint$rankings$er) + 150), ncol = 2)
 ```
 
-Figure \@ref(fig:mint-er-distr-plot-all) (A) shows the resulting expected ranks. This figure mainly helps to get a first impression of whether the evaluation procedure manages to find substantial differences between proposals. We can observe the creation of several clusters. The right side of the Figure (B) shows the same ER ordered from the best ranked proposal (left) to the worst (right) together with their 50% credible intervals. The naive funding line is defined as the ER of the last fundable proposal: the `r x`th (30%  of `r n_distinct(mint_sections$proposal)`) best ranked, according to its ER. A zoom into this last figure helps to find a cluster of proposals with credible intervals overlapping the naive funding line for which a random selection should be applied to decide upon the last remaining proposals to fund. 13 of the proposals in this zoomed part have their credible interval crossing the naive funding line, and would therefore form the random selection group. Seven of these 13 proposals will be selected for funding, which is `r round(7/13*100, 1)`%. 
+Figure \@ref(fig:mint-er-distr-plot-all) (A) shows the resulting expected ranks. This figure mainly helps to get a first impression of whether the evaluation procedure manages to find substantial differences between proposals. We can observe the creation of several clusters. The right side of the Figure (B) shows the same ER ordered from the best ranked proposal (left) to the worst (right) together with their 50% credible intervals. The naive funding line is defined as the ER of the last fundable proposal: the `r x`th (30%  of `r n_distinct(mint_sections$proposal)`) best ranked, according to its ER. A zoom into this last figure helps to find a cluster of proposals with credible intervals overlapping the naive funding line for which a random selection should be applied to decide upon the last remaining proposals to fund. Twelve of the proposals in this zoomed part have their credible interval crossing the naive funding line, and would therefore form the random selection group. Six of these twelve proposals will be selected for funding, which is `r round(6/12*100, 1)`%. 
 
 ## Accounting for ordinal outcomes in the project funding evaluation
 
@@ -1721,14 +1645,16 @@ bayesplot::mcmc_trace(mcmc_ls_b_object$samples,
 Below we show the values $\widehat{R}$ of the Gelman-Rubin convergence diagnostic \citep{Gelman1992}
 and traceplots for some important parameters for the Social Sciences panel in the Postdoc.Mobility case study.
 $\widehat{R}$ values substantially above 1 indicate lack of convergence.
-Gelman et al. (2014) \citep{Gelman2014} have recommended to use $1.1$ as threshold value for $\widehat{R}$.
+Gelman et al. (2014) \citep{Gelman2014} have recommended to use $1.1$ as threshold value for $\widehat{R}$. The default in the `ERforResearch` package is even lower at $1.01$.
 
-```{r, rhat-values-computation}
+```{r, rhat-values-computation, cache=TRUE}
 
 ## PM case study setting
-n.iter <- 10000
-n.burnin <- 5000
-n.chains <- 2
+n.iter <- 50 * 10^{3}
+n.burnin <- 10 * 10^{3}
+n.adapt <- 10 * 10^{3}
+max.iter <- 50 * 10^{3}
+n.chains <- 4
 seed <- 1991
 seed_ordinal <- seed + 1
 
@@ -1740,12 +1666,9 @@ mcmc_hss_s_ordinal_2 <-
                    id_voter = "voter",
                    grade_variable = "num_grade",
                    n_chains = n.chains, n_iter = n.iter,
-                   n_burnin = n.burnin,
-                   other_variables = "nu",
+                   n_burnin = n.burnin, n_adapt = n.adapt,
+                   max_iter = max.iter,
                    ordinal_scale = TRUE, point_scale = 6,
-                   path_to_jags_model =
-                     here( "revision", "manuscript",
-                           "jags_model_ordinal_interval.txt"),
                    seed = seed_ordinal, quiet = TRUE,
                    dont_bind = TRUE)
 
@@ -1753,7 +1676,7 @@ mcmc_hss_s_ordinal_2 <-
 # error messages and we do not need that result
 # use the whole series, not only the second half (autoburnin = FALSE)
 rhat_hss_s <- gelman.diag(mcmc_hss_s_ordinal_2$samples, autoburnin = FALSE,
-                         multivariate = FALSE)
+                          multivariate = FALSE)
 # rhat_est_hss_s <- rhat_hss_s$psrf[ ,1]
 
 
@@ -1765,7 +1688,7 @@ n_proposal <- 18
 n_voter <- 14
 # adapt the row names to notation in the paper
 rownames <- c(paste0("$\\theta_{", seq(1, n_proposal), "}$"),
-              paste0("$\\nu_{", seq(1, n_voter), "}$"),
+              # paste0("$\\nu_{", seq(1, n_voter), "}$"),
               paste0("rank", "$(\\theta_{", seq(1, n_proposal), "})$"),
               "$\\sigma$", "$\\tau$", "$\\tau_{\\nu}$")
 
