@@ -804,7 +804,7 @@ plot_rankogram(data = hss_h,
 
 Figure \@ref(fig:rank-credible-intervals-pm2020-ordinal) shows the ER of the proposals together with their 50\% credible intervals when using an Bayesian hierarchical model for ordinal outcome variable.
 
-```{r rank-credible-intervals-pm2020-ordinal, fig.height=7, fig.width=9.5, warning=FALSE, message=FALSE,  fig.cap = "<span style='color: #bababa;'>The expected rank together with 50% credible intervals of the rank using an ordinal outcome model. </span>\\label{fig:rank_credible_intervals_pm2020_ordinal}", cache = TRUE}
+```{r rank-credible-intervals-pm2020-ordinal, cache = TRUE}
 # Ordinal version of the JAGS model:
 seed_ordinal <- seed + 1
 mcmc_hss_s_ordinal <- 
@@ -871,7 +871,10 @@ mcmc_stem_ordinal <-
                    rhat_threshold = 1.1,
                    inits_type = "random",
                    seed = seed_ordinal, quiet = TRUE)
+```
 
+
+```{r rank-credible-intervals-pm2020-ordinal-plot, fig.height=7, fig.width=9.5, warning=FALSE, message=FALSE,  fig.cap = "<span style='color: #bababa;'>The expected rank together with 50% credible intervals of the rank using an ordinal outcome model. </span>\\label{fig:rank_credible_intervals_pm2020_ordinal}"}
 plot_er_dist_humanities_ordinal <- 
   plot_er_distributions(get_mcmc_samples_result = mcmc_hss_h_ordinal,
                         n_proposals = hss_h %>% 
@@ -1636,7 +1639,7 @@ get_agreement_plot(ranks_mint$rankings,
 
 The more complex the models the more burnin and iterations are needed to ensure convergence of the most important parameters. With the option  `dont_bind` set to `TRUE` in the `ERforResearch::get_mcmc_samples()` function, we can directly use the MCMC sample to perform convergence diagnostics, like plotting traceplots. The option in the function solely does not bind the different chains as for example the two chains used in our examples. Using he `bayesplot` package traceplots and others can easily be plotted. The following code chunk for example shows the traceplots of the $\theta_i$'s of all the proposals of the Biology Panel in Postdoc.mobility.
 
-```{r traceplot, fig.cap = "<span style='color: #bababa;'>Traceplots of the proposal effects of all 18 proposals in the Biology panel for the Postdoc.Mobility fellowships.</span>", fig.height = 12, fig.width = 15, warning = FALSE, fig.align = "center", cache = TRUE}
+```{r traceplot, fig.cap = "<span style='color: #bababa;'>Traceplots of the proposal effects of all 18 proposals in the Biology panel for the Postdoc.Mobility fellowships.</span>", fig.height = 12, fig.width = 15, warning = FALSE, fig.align = "center"}
 bayesplot::mcmc_trace(mcmc_ls_b_object$samples,
                       pars = paste0("application_intercept[", 1:18, "]"))
 ```
@@ -1703,4 +1706,226 @@ kable(table_hss_s, digits = 2, escape = FALSE,
       are given for different parameters in the ordinal model for the Social Sciences panel in the PM case study.") %>%
   #, and the upper limits of the 95\\% confidence intervals for $\\widehat{R}$
   kable_styling(latex_options = c("hold_position", "repeat_header"))
+```
+
+
+# Hyper-prior sensitivity
+
+Whenever Bayesian statistics are used, the question arrises whether the results are (too) sensitive to the priors chosen. The way our methodology is implemented allows us to use JAGS model definitions different from the default, and compare the results, i.e. the expected ranks. Figure \ref{fig:agreement_nu_variance} shows the agreement plot between the results from the default model versus the results using a JAGS model where the variance in the prior on the parameter $\nu_j$ is changed from $0.5^2$ to $0.1^2$ (smaller) and to $2^2$ (larger). The results presented here are for the Social Sciences Panel from Postdoc.Mobility. Then Figure \ref{fig:agreement_gamma} also shows an agreement plot for the same panel but changing the distribution of the priors on the precision, from uniform priors on the variances ($\tau_{\theta}^2, \tau_{\lambda}^2, \sigma^2$) to a gamma(0.1,0.1) distribution on the precisions ($1/\mbox{variance}$). Regardless the prior choices, the results do agree. 
+
+```{r prior-sensitivity, cache = TRUE}
+## Use different JAGS model:
+cat("model{
+      # Likelihood:
+      for (i in 1:n) { # i is not the application but the review
+          grade[i] ~ dnorm(mu[i], inv_sigma2)
+                # inv_sigma2 is precision (1 / variance)
+          mu[i] <- overall_mean + application_intercept[num_application[i]] +
+          voter_intercept[num_application[i], num_voter[i]]
+      }
+      # Ranks:
+      rank_theta[1:n_application] <- rank(-application_intercept[])
+      # Priors:
+      for (j in 1:n_application){
+        application_intercept[j] ~ dnorm(0, inv_tau_application2)
+      }
+      for (l in 1:n_voter){
+        for(j in 1:n_application){
+          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
+        }
+      }
+      for (l in 1:n_voter){
+        nu[l] ~ dnorm(0, 100) # 1/(0.1^2) = 100
+      }
+      sigma ~ dunif(0.000001, 2)
+      inv_sigma2 <- pow(sigma, -2)
+      inv_tau_application2 <- pow(tau_application, -2)
+      tau_application ~ dunif(0.000001, 2)
+      inv_tau_voter2 <- pow(tau_voter, -2)
+      tau_voter ~ dunif(0.000001, 2)
+    }",
+    file = here("minor_revision", "manuscript",
+                "jags_model_change_nuvariance_smaller.txt"))
+
+cat("model{
+      # Likelihood:
+      for (i in 1:n) { # i is not the application but the review
+          grade[i] ~ dnorm(mu[i], inv_sigma2)
+                # inv_sigma2 is precision (1 / variance)
+          mu[i] <- overall_mean + application_intercept[num_application[i]] +
+          voter_intercept[num_application[i], num_voter[i]]
+      }
+      # Ranks:
+      rank_theta[1:n_application] <- rank(-application_intercept[])
+      # Priors:
+      for (j in 1:n_application){
+        application_intercept[j] ~ dnorm(0, inv_tau_application2)
+      }
+      for (l in 1:n_voter){
+        for(j in 1:n_application){
+          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
+        }
+      }
+      for (l in 1:n_voter){
+        nu[l] ~ dnorm(0, 0.25) # 1/(2^2) = 0.25
+      }
+      sigma ~ dunif(0.000001, 2)
+      inv_sigma2 <- pow(sigma, -2)
+      inv_tau_application2 <- pow(tau_application, -2)
+      tau_application ~ dunif(0.000001, 2)
+      inv_tau_voter2 <- pow(tau_voter, -2)
+      tau_voter ~ dunif(0.000001, 2)
+    }",
+    file = here("minor_revision", "manuscript",
+                "jags_model_change_nuvariance_larger.txt"))
+
+##### Get the ER results: ####
+n.iter <- 50 * 10^{3}
+n.burnin <- 10 * 10^{3}
+n.adapt <- 10 * 10^{3}
+max.iter <- 50 * 10^{3}
+n.chains <- 4
+seed <- 1991
+
+
+mcmc_hss_s_object_smaller_variance <- 
+  get_mcmc_samples(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   path_to_jags_model = 
+                     here("minor_revision", "manuscript", 
+                          "jags_model_change_nuvariance_smaller.txt"),
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin, n_adapt = n.adapt,
+                   max_iter = max.iter,
+                   inits_type = "random",
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "tau_application",
+                       "nu", "tau_voter", "rank_theta", "sigma"),
+                   seed = seed + 1, quiet = TRUE, dont_bind = TRUE)
+
+mcmc_hss_s_object_larger_variance <- 
+  get_mcmc_samples(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   path_to_jags_model = 
+                     here("minor_revision", "manuscript", 
+                          "jags_model_change_nuvariance_larger.txt"),
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin, n_adapt = n.adapt,
+                   max_iter = max.iter,
+                   inits_type = "random",
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "tau_application",
+                       "nu", "tau_voter", "rank_theta", "sigma"),
+                   seed = seed + 2, quiet = TRUE, dont_bind = TRUE)
+
+
+ranks_hss_s_smaller_variance <- 
+  get_er_from_jags(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   mcmc_samples = mcmc_hss_s_object_smaller_variance)
+
+ranks_hss_s_larger_variance <- 
+  get_er_from_jags(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   mcmc_samples = mcmc_hss_s_object_larger_variance)
+```
+
+
+```{r prior-sensitivity-plot, fig.align='center', fig.height=10, fig.width=9.5, warning=FALSE, message=FALSE, fig.cap = "<span style='color: #bababa;'>Difference in expected rank between results based on default model and a model with smaller variance ($0.1^2$) on $\\nu$ and another model with larger variance ($2^2$) on $\\nu$. The 95\\% limits of agreement are plotted (red dotted lines) as well as the mean difference (gray line, \\textit{i.e.} bias) for the Social Science panel evaluating the Postdoc.Mobility proposals.</span>\\label{fig:agreement_nu_variance}"}
+gridExtra::grid.arrange(get_agreement_plot(ranks_hss_s$rankings,
+                                           ranks_hss_s_smaller_variance$rankings,
+                                           title = "with smaller variance in hyperprior on nu", 
+                                           ymin = -.25, ymax = .25),
+                        get_agreement_plot(ranks_hss_s$rankings,
+                                           ranks_hss_s_larger_variance$rankings,
+                                           title = "with larger variance in hyperprior on nu", 
+                                           ymin = -.25, ymax = .25))
+
+```
+
+
+```{r prior-sensitivity2, cache = TRUE, class.source = "fold-show", warning=FALSE}
+## Use different JAGS model: 
+# half-cauchy on precision (https://sourceforge.net/p/mcmc-jags/discussion/610037/thread/7527c08a/)
+cat("model{
+      # Likelihood:
+      for (i in 1:n) { # i is not the application but the review
+          grade[i] ~ dnorm(mu[i], inv_sigma2)
+                # inv_sigma2 is precision (1 / variance)
+          mu[i] <- overall_mean + application_intercept[num_application[i]] +
+          voter_intercept[num_application[i], num_voter[i]]
+      }
+      # Ranks:
+      rank_theta[1:n_application] <- rank(-application_intercept[])
+      # Priors:
+      for (j in 1:n_application){
+        application_intercept[j] ~ dnorm(0, inv_tau_application2)
+      }
+      for (l in 1:n_voter){
+        for(j in 1:n_application){
+          voter_intercept[j, l] ~ dnorm(nu[l], inv_tau_voter2)
+        }
+      }
+      for (l in 1:n_voter){
+        nu[l] ~ dnorm(0, 4) # 1/(0.5^2) = 4
+      }
+      inv_sigma2 ~ dgamma(0.01, 0.01)
+      # inv_sigma2 <- pow(inv_sigma, 2)
+      # inv_tau_application2 <- pow(inv_tau_application, 2)
+      inv_tau_application2 ~ dgamma(0.01, 0.01)
+      # inv_tau_voter2 <- pow(inv_tau_voter, 2)
+      inv_tau_voter2 ~ dgamma(0.01, 0.01)
+    }",
+    file = here("minor_revision", "manuscript",
+                "jags_model_change_halfcauchy.txt"))
+
+##### Get the ER results: ####
+# load.module("glm")
+mcmc_hss_s_object_half_cauchy <- 
+  get_mcmc_samples(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   path_to_jags_model = 
+                     here("minor_revision", "manuscript", 
+                          "jags_model_change_halfcauchy.txt"),
+                   n_chains = n.chains, n_iter = n.iter,
+                   n_burnin = n.burnin, n_adapt = n.adapt,
+                   max_iter = max.iter,
+                   inits_type = "random",
+                   variables_to_sample = "specified",
+                   rhat_threshold = 1.1,
+                   names_variables_to_sample = 
+                     c("application_intercept", "inv_tau_application2",
+                       "nu", "inv_tau_voter2", "rank_theta", "inv_sigma2"),
+                   seed = seed + 3, quiet = TRUE, dont_bind = TRUE)
+
+
+ranks_hss_s_half_cauchy <- 
+  get_er_from_jags(data = hss_s,
+                   id_application = "proposal",
+                   id_voter = "voter", 
+                   grade_variable = "num_grade",
+                   mcmc_samples = mcmc_hss_s_object_half_cauchy)
+```
+
+
+```{r prior-sensitivity-plot2, fig.align='center', fig.height=10, fig.width=9.5, warning=FALSE, message=FALSE, fig.cap = "<span style='color: #bababa;'>Difference in expected rank between results based on default model and a model with gamma prior on the precisions (i.e. the inverse of the variances).</span>\\label{fig:agreement_gamma}"}
+gridExtra::grid.arrange(get_agreement_plot(ranks_hss_s$rankings,
+                                           ranks_hss_s_half_cauchy$rankings,
+                                           title = "with gamma-priors on precision parameters", 
+                                           ymin = -.25, ymax = .25))
+
 ```
