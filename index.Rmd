@@ -30,10 +30,16 @@ options(dplyr.summarise.inform = FALSE)
 options(knitr.kable.NA = '')
 ```
 
+**Note that this supplement still uses the `ERforResearch` package version from when the paper was published. Check out the package [website](https://github.com/snsf-data/ERforResearch) with a package demo for the latest functionalities!**
+
 This online supplement reproduces all the Figures and Tables presented in the publication "Rethinking the Funding Line at the Swiss National Science Foundation: Bayesian Ranking and Lottery". The methodology of the expected rank (ER) for grant peer review is fully implemented in the `R` package `{ERforResearch}` downloadable from [github](https://github.com/snsf-data/ERforResearch) with [documentation](https://snsf-data.github.io/ERforResearch/). To install the package, the following code can be used:
 ```{r, message = FALSE, class.source = "fold-show", warning=FALSE}
 # Install ERforResearch from github:
 # devtools::install_github("snsf-data/ERforResearch")
+
+# For this result reproduction we still use the old version of ERforResearch 
+# which can be install like so: 
+devtools::install_github("snsf-data/ERforResearch@old.version.for.paper")
 library(ERforResearch)
 ```
 
@@ -135,7 +141,7 @@ get_agreement_plot <- function(rankings, rankings_ordinal, title, ymin = -.5,
     ylim(ymin, ymax) + 
     labs(y = "Difference in ER", x = "Average ER of both approaches",
          title = title) +
-    snf.plot::snsf_theme 
+    theme_minimal() 
 }
 # Percentile Loss Function
 percentile_loss <- function(true_rank, estimated_rank, perc = .3, p = 2,
@@ -513,6 +519,8 @@ gridExtra::grid.arrange(plot_hss_h +
                         ncol = 3)
 ```
 
+
+
 To fully account for the uncertainty, we plot the same ER of the proposals together with their 50\% credible intervals in Figure \@ref(fig:rank-credible-intervals-pm2020). The methodology then recommends the following decisions: 
 
 * Humanities panel: The four best ranked proposals are funded, the remaining seven are rejected, no random selection element.
@@ -579,6 +587,56 @@ gridExtra::grid.arrange(plot_er_dist_humanities +
                         plot_er_dist_stem + 
                           theme(legend.position = "none",
                                 title = element_text(size = 7)), leg, ncol = 3)
+```
+
+```{r}
+
+leg <- cowplot::get_legend(plot_er_dist_stem)
+plot <- 
+  gridExtra::grid.arrange(plot_er_dist_humanities + 
+                            labs(x = "Proposal Number") +
+                            annotate(geom = "text", y = 4, x = 8.5,
+                                     label = "prov funding line",
+                                     color = "blue4", size = 3) +
+                            theme(axis.title.x = element_text(size = 7),
+                                  legend.position = "none",
+                                  title = element_text(size = 7)),
+                          plot_er_dist_social_sciences +  
+                            labs(x = "Proposal Number") +
+                            annotate(geom = "text", y = 8.2, x = 15,
+                                     label = "prov funding line",
+                                     color = "blue4", size = 3) +
+                            theme(axis.title.x = element_text(size = 7),
+                                  legend.position = "none",
+                                  title = element_text(size = 7)),
+                          plot_er_dist_medicine + 
+                            labs(x = "Proposal Number") +
+                            annotate(geom = "text", y = 6, x = 12,
+                                     label = "prov funding line",
+                                     color = "blue4", size = 3) +
+                            theme(axis.title.x = element_text(size = 7),
+                                  legend.position = "none",
+                                  title = element_text(size = 7)),
+                          plot_er_dist_biology + 
+                            labs(x = "Proposal Number") +
+                            annotate(geom = "text", y = 9, x = 15,
+                                     label = "prov funding line",
+                                     color = "blue4", size = 3) +
+                            theme(axis.title.x = element_text(size = 7),
+                                  legend.position = "none",
+                                  title = element_text(size = 7)),
+                          plot_er_dist_stem + 
+                            labs(x = "Proposal Number") +
+                            annotate(geom = "text", y = 7.5, x = 15,
+                                     label = "prov funding line",
+                                     color = "blue4", size = 3) +
+                            theme(legend.position = "none",
+                                  title = element_text(size = 7),
+                                  axis.title.x = element_text(size = 7)),
+                          top = "Bayesian Ranking Recommendations",
+                          leg, ncol = 2)
+
+ggsave(filename = "Figure1.png", plot = plot, device='png', dpi=700)
 ```
 
 
@@ -1087,9 +1145,7 @@ mcmc_mint_object <-
 
 
 ```{r compute-er-mint-data-load, echo = FALSE, results = "hide"}
-mcmc_mint_object <- readRDS(here("minor_revision", "manuscript",
-                                 "run_models", 
-                                 "mcmc_mint_object_0405_random.rds"))
+mcmc_mint_object <- readRDS(here("mcmc_mint_object_1108.rds"))
 ```
 
 
@@ -1200,7 +1256,7 @@ ranks_mint_section4 <-
 
 ```{r compute-er-mint-data-part2, eval = FALSE, results = "hide"}
 #### JAGS model for ordinal outcome ####
-n.iter <- 400 * 10^{3}
+n.iter <- 200 * 10^{3}
 n.burnin <- 150 * 10^{3}
 n.adapt <- 100 * 10^{3}
 n.chains <- 4
@@ -1214,19 +1270,20 @@ mcmc_mint_ordinal <-
                    tau_section_name = "tau_section",
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
-                   max_iter = 400 * 10^{3}, 
+                   max_iter = 200 * 10^{3}, 
                    rhat_threshold = 1.1,
                    inits_type = "random",
                    ordinal_scale = TRUE,
                    point_scale = 6,
                    seed = seed_ordinal, quiet = TRUE)
+
+readr::write_rds(mcmc_mint_ordinal, here("mcmc_mint_object_ordinal_3101.rds"))
 ```
 
 
-```{r compute-er-mint-data-part-ordinal, echo = FALSE,  results = "hide"}
+```{r compute-er-mint-data-part-ordinal, echo = FALSE, eval = TRUE, results = "hide"}
 mcmc_mint_ordinal <- 
-  readRDS(here("minor_revision", "manuscript", "run_models", 
-               "mcmc_mint_object_ordinal_0805.rds"))
+  readRDS(here("mcmc_mint_object_ordinal_3101.rds"))
 ```
 
 
@@ -1359,7 +1416,7 @@ rm(mcmc_mint_object)
 mcmc_mint$samples <- do.call("rbind", mcmc_mint$samples)
 mcmc_mint$samples <- mcmc_mint$samples[sample(1:1600000, 100000),]
   
-mcmc_mint_ordinal$samples <- mcmc_mint_ordinal$samples[sample(1:1600000, 100000),]
+mcmc_mint_ordinal$samples <- mcmc_mint_ordinal$samples[sample(1:800000, 100000),]
 ```
 
 
@@ -1421,7 +1478,7 @@ gridExtra::grid.arrange(p1 +
 ```
 
 
-To better decide on which proposals should be funded in each section individually, and where, if needed, a random selection group should be defined, consider Figure \ref{fig:ER_dist_all_mint_ind}. Hence, looking at the section seperately would lead to a random selection group of 8 in Section 1, which is `r round(8/87*100, 1)`% of all proposals evaluated in this section; 2 (`r round(2/8*100, 1)`%) of these can still be funded. No random selection group is needed for section 2, while three more proposals can still be funded among five in the random selection group in section 3, and three more proposals in a random selection group of seven for section 4. 
+To better decide on which proposals should be funded in each section individually, and where, if needed, a random selection group should be defined, consider Figure \ref{fig:ER_dist_all_mint_ind}. Hence, looking at the section separately would lead to a random selection group of 8 in Section 1, which is `r round(8/87*100, 1)`% of all proposals evaluated in this section; 2 (`r round(2/8*100, 1)`%) of these can still be funded. No random selection group is needed for section 2, while three more proposals can still be funded among five in the random selection group in section 3, and three more proposals in a random selection group of seven for section 4. 
 
 ```{r er-rank-distribution-mint-ind, fig.height=8, fig.width=9, warning=FALSE, message=FALSE, fig.cap = "<span style='color: #bababa;'>The ER with 50\\% credible intervals. The color code shows the final group (Accepted, Rejected or Random Selection).</span>\\label{fig:ER_dist_all_mint_ind}", fig.align="center"}
 
@@ -1586,6 +1643,38 @@ gridExtra::grid.arrange(
                       xmin = 160, xmax = 360, 
                       ymin = min(ranks_mint$rankings$er) + 5,
                       ymax = min(ranks_mint$rankings$er) + 150), ncol = 2)
+
+# extra
+if (FALSE){
+  pl <- plot_er_distributions(get_mcmc_samples_result = mcmc_mint,
+                              n_proposals = mint_sections %>% 
+                                summarise(n_distinct(proposal)) %>% pull(),
+                              name_er_or_theta = "rank_theta", title = " ",
+                              names_proposals = mint_sections %>% 
+                                pull(proposal) %>% unique(),
+                              number_fundable = x,
+                              size_pt = .1, size_outer = 0, size_inner = .5,
+                              alpha_inner = .8, outer_show = FALSE) +
+
+    theme(axis.text.x = element_blank(),
+          legend.position = c(.8,.5),
+          panel.grid.major.x = element_blank(),
+          axis.title.y = element_text(size = 8, vjust = 2))
+    
+    
+    pl <- pl +
+      annotate(geom = "text", y = 115, x = 250,
+               label = "provisonal funding line",
+               color = "blue4", size = 4) +
+      theme(axis.title.x = element_blank(),
+            legend.position = c(.8,.2),
+            panel.grid.major.y = element_line(),
+            axis.text.y = element_text(),
+            panel.grid.major.x = element_blank(),
+            axis.text.x = element_blank())
+  ggsave(filename = "Figure_br.png", plot = pl, device='png', dpi=700)
+  
+}
 ```
 
 Figure \@ref(fig:mint-er-distr-plot-all) (A) shows the resulting expected ranks. This figure mainly helps to get a first impression of whether the evaluation procedure manages to find substantial differences between proposals. We can observe the creation of several clusters. The right side of the Figure (B) shows the same ER ordered from the best ranked proposal (left) to the worst (right) together with their 50% credible intervals. The naive funding line is defined as the ER of the last fundable proposal: the `r x`th (30%  of `r n_distinct(mint_sections$proposal)`) best ranked, according to its ER. A zoom into this last figure helps to find a cluster of proposals with credible intervals overlapping the naive funding line for which a random selection should be applied to decide upon the last remaining proposals to fund. Twelve of the proposals in this zoomed part have their credible interval crossing the naive funding line, and would therefore form the random selection group. Six of these twelve proposals will be selected for funding, which is `r round(6/12*100, 1)`%. 
@@ -1744,8 +1833,7 @@ cat("model{
       inv_tau_voter2 <- pow(tau_voter, -2)
       tau_voter ~ dunif(0.000001, 2)
     }",
-    file = here("minor_revision", "manuscript",
-                "jags_model_change_nuvariance_smaller.txt"))
+    file = here("jags_model_change_nuvariance_smaller.txt"))
 
 cat("model{
       # Likelihood:
@@ -1776,8 +1864,7 @@ cat("model{
       inv_tau_voter2 <- pow(tau_voter, -2)
       tau_voter ~ dunif(0.000001, 2)
     }",
-    file = here("minor_revision", "manuscript",
-                "jags_model_change_nuvariance_larger.txt"))
+    file = here("jags_model_change_nuvariance_larger.txt"))
 
 ##### Get the ER results: ####
 n.iter <- 50 * 10^{3}
@@ -1794,8 +1881,7 @@ mcmc_hss_s_object_smaller_variance <-
                    id_voter = "voter", 
                    grade_variable = "num_grade",
                    path_to_jags_model = 
-                     here("minor_revision", "manuscript", 
-                          "jags_model_change_nuvariance_smaller.txt"),
+                     here("jags_model_change_nuvariance_smaller.txt"),
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
                    max_iter = max.iter,
@@ -1813,8 +1899,7 @@ mcmc_hss_s_object_larger_variance <-
                    id_voter = "voter", 
                    grade_variable = "num_grade",
                    path_to_jags_model = 
-                     here("minor_revision", "manuscript", 
-                          "jags_model_change_nuvariance_larger.txt"),
+                     here("jags_model_change_nuvariance_larger.txt"),
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
                    max_iter = max.iter,
@@ -1888,8 +1973,7 @@ cat("model{
       # inv_tau_voter2 <- pow(inv_tau_voter, 2)
       inv_tau_voter2 ~ dgamma(0.01, 0.01)
     }",
-    file = here("minor_revision", "manuscript",
-                "jags_model_change_halfcauchy.txt"))
+    file = here("jags_model_change_halfcauchy.txt"))
 
 ##### Get the ER results: ####
 # load.module("glm")
@@ -1899,8 +1983,7 @@ mcmc_hss_s_object_half_cauchy <-
                    id_voter = "voter", 
                    grade_variable = "num_grade",
                    path_to_jags_model = 
-                     here("minor_revision", "manuscript", 
-                          "jags_model_change_halfcauchy.txt"),
+                     here("jags_model_change_halfcauchy.txt"),
                    n_chains = n.chains, n_iter = n.iter,
                    n_burnin = n.burnin, n_adapt = n.adapt,
                    max_iter = max.iter,
